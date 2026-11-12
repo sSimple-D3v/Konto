@@ -2394,15 +2394,28 @@ async function exportBackup(p) {
   p.lastBackup = new Date().toISOString(); saveDB(); render(); toast('Cópia de segurança criada');
 }
 
+/* Importar uma cópia: se já existe esse perfil (o mesmo id ou o mesmo @), a cópia SUBSTITUI-O (mantém o id e o @, depois de confirmares);
+   só se não existir é que cria um perfil novo. */
 async function importBackup(file) {
   try {
     const data = JSON.parse(await file.text());
     const src = data?.profile;
     if (data?.app !== 'konto' || !src || typeof src.name !== 'string') throw new Error('formato');
     if ((data.version || 1) > DB_VERSION) return toast('Esta cópia é de uma versão mais recente da app');
-    const prof = migrateProfile(src);
-    prof.id = uid();                                      // nunca substitui um perfil existente
-    prof.handle = uniqueHandle(prof.handle || prof.name, prof.id);       // o @ também não pode repetir-se
+    const prof = migrateProfile(src), h = cleanHandle(src.handle);
+    const same = db.profiles.find(x => x.id === src.id) || (h && db.profiles.find(x => x.handle === h));
+    if (same) {
+      const ok = await askConfirm({ title: `Substituir o perfil "${same.name}"?`, text: 'Os dados deste perfil vão ser substituídos pelos da cópia de segurança. Não dá para desfazer.', ok: 'Substituir', danger: true, icon: 'warn' });
+      if (!ok) return;
+      prof.id = same.id;
+      prof.handle = uniqueHandle(src.handle || same.handle || prof.name, same.id);
+      db.profiles[db.profiles.indexOf(same)] = prof; saveDB();
+      if (ui.profileId === prof.id) applyTheme(themeOf(prof));
+      toast(`Perfil "${prof.name}" atualizado`);
+      render(); return;
+    }
+    prof.id = src.id && !db.profiles.some(x => x.id === src.id) ? src.id : uid();      // mantém o id da cópia, para a próxima importação reconhecer o perfil
+    prof.handle = uniqueHandle(src.handle || prof.name, prof.id);       // o @ não pode repetir-se
     db.profiles.push(prof); saveDB();
     toast(`Perfil "${prof.name}" importado`);
     if (ui.screen === 'welcome' || ui.screen === 'ask') go('picker'); else render();

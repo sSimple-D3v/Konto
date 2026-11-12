@@ -1,5 +1,5 @@
 // Service worker: cache-first, para a app funcionar 100% offline.
-const CACHE = 'konto-v251';
+const CACHE = 'konto-v252';
 const FILES = ['./', './index.html', './styles.css', './storage.js', './brands.js', './app.js', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
