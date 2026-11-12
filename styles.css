@@ -41,6 +41,10 @@ body { min-height: 100dvh; display: flex; justify-content: center; }
 button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
 input, select { font: inherit; color: var(--text); }
 h1, h2, h3, p { margin: 0; }
+/* Comporta-se como uma app e não como uma página: o texto não se seleciona, não abre o menu de pressão longa em imagens e ligações, as imagens não se arrastam e a página não "estica" ao puxar. Só os campos de escrita deixam selecionar. */
+html, body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
+img, svg { -webkit-user-drag: none; user-drag: none; }
 
 /* Ícones SVG */
 .i { width: 1.2em; height: 1.2em; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: -.22em; flex: none; }

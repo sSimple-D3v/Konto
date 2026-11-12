@@ -859,6 +859,7 @@ function chargesOn(p, y, m) {            // cobranças de subscrições num mês
   }
   return out.sort((a, b) => a.day - b.day);
 }
+const afterToday = () => { const t = today0(); return new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1); };      // "próximo" começa amanhã: o que cobra hoje já conta como pago
 function nextCharge(s, from) {                               // primeira cobrança em ou depois de "from"
   for (let i = 0; i <= 12; i++) {
     const dt = new Date(from.getFullYear(), from.getMonth() + i, 1), y = dt.getFullYear(), m = dt.getMonth();
@@ -1416,7 +1417,7 @@ function subStatus(s) {
     const d = new Date(y, m, Math.min(s.day, dim(y, m)));
     if (d <= t) { last = d; break; }
   }
-  const next = nextCharge(s, new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1));   // o que cobra hoje já conta como pago
+  const next = nextCharge(s, afterToday());
   const f = d => `${d.getDate()} ${MESES[d.getMonth()].slice(0, 3)}${d.getFullYear() !== t.getFullYear() ? ' ' + d.getFullYear() : ''}`;
   return `${last ? `${everyOf(s) === 12 ? 'Paga' : 'Última'} a ${f(last)} · ` : ''}próxima a ${f(next)}`;
 }
@@ -1624,7 +1625,7 @@ function carFixRow(c) {
     <div class="amt neg">${c.variable ? '≈ ' : ''}${cost(billInfo(P, c).typical)}</div></button>`;
 }
 function carFixCard(p, v) {
-  const list = p.carFix.filter(c => !c.veh || !v || c.veh === v.id).sort((a, b) => nextCharge(a, today0()) - nextCharge(b, today0()));
+  const list = p.carFix.filter(c => !c.veh || !v || c.veh === v.id).sort((a, b) => nextCharge(a, afterToday()) - nextCharge(b, afterToday()));
   const pend = pendingInvoices(p, list).slice(0, 4);                                  // pagamentos variáveis já vencidos e sem valor real
   const pendHTML = pend.length ? `<div class="pend-box"><b>Por registar</b>${pend.map(x => { const tp = carFixTypeOf(x.b.type);
     return `<button class="item" data-act="invoice" data-id="${x.b.id}:${x.ym}"><div class="ic" style="background:${tp.color}">${ico(tp.icon)}</div>
@@ -2162,7 +2163,7 @@ function vHouse(p) {
   const rows = Object.entries(byType).sort((a, b) => b[1] - a[1]);
   const bar = rows.length ? `<div class="stackbar">${rows.map(([t, v]) => `<i style="width:${v / eqMonthly * 100}%;background:${billTypeOf(t).color}"></i>`).join('')}</div>` : '';
   const legend = rows.map(([t, v]) => `<div class="lg"><i style="background:${billTypeOf(t).color}"></i><span>${ico(billTypeOf(t).icon)} ${billTypeOf(t).name}</span><b>${cost(v)}</b></div>`).join('');
-  const nxt = p.bills.map(b => ({ b, d: nextCharge(b, today0()) })).sort((a, c) => a.d - c.d)[0];
+  const nxt = p.bills.map(b => ({ b, d: nextCharge(b, afterToday()) })).sort((a, c) => a.d - c.d)[0];
   const pend = pendingInvoices(p).slice(0, 4);
   const pendCard = pend.length ? `<div class="card"><div class="card-h"><h3>Faturas por registar</h3><span class="muted small">${pend.length}</span></div>
       ${pend.map(x => { const bt = billTypeOf(x.b.type), mm = +x.ym.slice(5) - 1;
