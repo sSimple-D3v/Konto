@@ -75,12 +75,10 @@ function saveDB() { Store.save(); }                      // browser: localStorag
 
 /* ── Tema: cor, estilo do gradiente e modo claro/escuro. Cada perfil tem o seu (p.theme). ── */
 const PALETTES = [   // g = as duas cores do gradiente; s = a cor predominante (é a do estilo "Sólido"); dark/light = cor de destaque nos modos escuro/claro; a2 = cor de apoio
-  { id: 'esmeralda', name: 'Esmeralda',  g: ['#34d399', '#6366f1'], s: '#34d399', dark: '#34d399', light: '#10b981', a2: '#6366f1' },
+  { id: 'esmeralda', name: 'Esmeralda',  g: ['#34d399', '#6366f1'], s: '#34d399', dark: '#34d399', light: '#10b981', a2: '#6366f1', tintDark: '#5393a8' },   // tintDark: o verde do fundo no modo Auto escuro, menos vivo
   { id: 'oceano',    name: 'Oceano',     g: ['#67e8f9', '#2563eb'], s: '#06b6d4', dark: '#22d3ee', light: '#0891b2', a2: '#3b82f6' },
-  { id: 'sol',       name: 'Pôr do sol', g: ['#fbbf24', '#f472b6'], s: '#fb923c', dark: '#fb923c', light: '#ea580c', a2: '#f472b6' },
   { id: 'rosa',      name: 'Rosa',       g: ['#f472b6', '#a78bfa'], s: '#ec4899', dark: '#f472b6', light: '#db2777', a2: '#a78bfa' },
   { id: 'aurora',    name: 'Aurora',     g: ['#5eead4', '#a855f7'], s: '#8b5cf6', dark: '#a78bfa', light: '#7c3aed', a2: '#2dd4bf' },
-  { id: 'fogo',      name: 'Fogo',       g: ['#fde047', '#dc2626'], s: '#f97316', dark: '#fb923c', light: '#ea580c', a2: '#ef4444' },
   { id: 'cereja',    name: 'Cereja',     g: ['#fb7185', '#9f1239'], s: '#f43f5e', dark: '#fb7185', light: '#e11d48', a2: '#fda4af' },
   { id: 'floresta',  name: 'Floresta',   g: ['#bef264', '#15803d'], s: '#84cc16', dark: '#a3e635', light: '#65a30d', a2: '#22c55e' },
   { id: 'tropical',  name: 'Tropical',   g: ['#a3e635', '#06b6d4'], s: '#22d3ee', dark: '#a3e635', light: '#0d9488', a2: '#22d3ee' },
@@ -88,19 +86,26 @@ const PALETTES = [   // g = as duas cores do gradiente; s = a cor predominante (
   { id: 'lavanda',   name: 'Lavanda',    g: ['#e9d5ff', '#6366f1'], s: '#a78bfa', dark: '#a5b4fc', light: '#6366f1', a2: '#c4b5fd' },
   { id: 'algodao',   name: 'Algodão',    g: ['#f9a8d4', '#7dd3fc'], s: '#f9a8d4', dark: '#f9a8d4', light: '#db2777', a2: '#7dd3fc' },
   { id: 'noite',     name: 'Noite',      g: ['#818cf8', '#312e81'], s: '#6366f1', dark: '#818cf8', light: '#4f46e5', a2: '#a5b4fc' },
-  { id: 'ouro',      name: 'Ouro',       g: ['#fde047', '#f97316'], s: '#facc15', dark: '#facc15', light: '#ca8a04', a2: '#fb923c' },
-  { id: 'caramelo',  name: 'Caramelo',   g: ['#fcd34d', '#92400e'], s: '#d97706', dark: '#fbbf24', light: '#b45309', a2: '#f59e0b' },
   { id: 'grafite',   name: 'Grafite',    g: ['#f3f4f6', '#6b7280'], s: '#9ca3af', dark: '#e5e7eb', light: '#374151', a2: '#9ca3af' },
 ];
-const THEME_STYLES = [['gradient', 'Gradiente'], ['pixel', 'Píxeis'], ['solid', 'Sólido'], ['aurora', 'Aurora'], ['grid', 'Quadrículas'], ['conic', 'Cónico'], ['magma', 'Magma'], ['ocean', 'Ondas do oceano'], ['embers', 'Brasas'], ['eruption', 'Erupção'], ['crust', 'Crosta rachada']];
+const THEME_STYLES = [['gradient', 'Gradiente'], ['pixel', 'Píxeis'], ['solid', 'Sólido'], ['aurora', 'Aurora'], ['grid', 'Quadrículas'], ['conic', 'Cónico'], ['magma', 'Magma'], ['ocean', 'Ondas do oceano'], ['embers', 'Brasas'], ['crust', 'Crosta rachada'], ['neon', 'Néon'], ['clouds', 'Nuvens'], ['rain', 'Chuva'], ['marble', 'Mármore'], ['paper', 'Papel'], ['hgrid', 'Corações a cintilar'], ['jelly', 'Medusas'], ['kelp', 'Algas e bolhas'], ['bars', 'Barras'], ['linechart', 'Linha de gráfico']];
 // estilos que só existem animados (Magma, Ondas, Brasas…): com "Animações ligadas" a mexer; desligadas (ou com "reduzir animações" do sistema), ficam só em imagem parada.
 // O código de duas letras serve para os nomes das variáveis CSS (--mg-cover, --em-card…).
-const FLUID_CODE = { magma: 'mg', ocean: 'oc', embers: 'em', eruption: 'er', crust: 'cr' };
+const FLUID_CODE = { magma: 'mg', ocean: 'oc', embers: 'em', crust: 'cr', neon: 'ne', clouds: 'cl', rain: 'ra', marble: 'mb', paper: 'pp', hgrid: 'hg', jelly: 'jl', kelp: 'kl', bars: 'bs', linechart: 'lc' };
 const ALWAYS_ANIM = Object.keys(FLUID_CODE);
-const THEME_MODES = [['auto', 'Automático'], ['dark', 'Escuro'], ['light', 'Claro']];
-const CAL_STYLES = [['soft', 'Quadrado suave'], ['min', 'Minimalista'], ['grid', 'Grelha']];
-const DEFAULT_THEME = { palette: 'esmeralda', style: 'gradient', mode: 'auto', cal: 'soft', anim: false, calStyle: false, cardStyle: false };
-const validStyle = t => (THEME_STYLES.some(s => s[0] === t.style) ? t : { ...t, style: "gradient" });   // perfis antigos com estilos removidos (riscas, pontos…) caem no Gradiente
+const THEME_MODES = [['dark', 'Escuro'], ['light', 'Claro'], ['autodark', 'Auto escuro'], ['autolight', 'Auto claro']];     // Auto: o fundo e as caixas ganham um toque da cor escolhida
+const MODE_KEYS = THEME_MODES.map(m => m[0]);
+const CAL_STYLES = [['soft', 'Padrão'], ['min', 'Minimalista'], ['grid', 'Grelha']];
+const DEFAULT_THEME = { palette: 'esmeralda', style: 'gradient', mode: 'autolight', cal: 'soft', anim: false, cardStyle: false, speed: 1, amount: 3, day: 'default' };
+const DAY_STYLES = [['default', 'Padrão'], ['sticker', 'Autocolante']];
+const fxLevel = t => Math.min(5, Math.max(1, Math.round(+t?.amount || 3)));     // quantidade de efeitos: 1 (muito poucos) a 5 (muitos); 3 = o aspeto de sempre
+const fxSpeed = t => Math.min(2, Math.max(.5, +t?.speed || 1));                  // velocidade das animações (0,5× a 2×)
+const FX_AMOUNT = ['Muito poucos', 'Poucos', 'Normal', 'Bastantes', 'Muitos'];
+const fxSpeedLabel = v => String(v).replace('.', ',') + '×';
+const validStyle = t => {                          // estilos que já não existem caem no Gradiente; o antigo "Automático" (seguir o telemóvel) passa a Claro ou Escuro, conforme o telemóvel estava
+  const okStyle = THEME_STYLES.some(s => s[0] === t.style), okPal = PALETTES.some(p => p.id === t.palette), mode = MODE_KEYS.includes(t.mode) ? t.mode : (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  return okStyle && okPal && mode === t.mode ? t : { ...t, style: okStyle ? t.style : 'gradient', palette: okPal ? t.palette : 'esmeralda', mode };
+};
 const themeOf = p => validStyle({ ...DEFAULT_THEME, ...(p?.theme || {}) });
 const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const pixelCache = {};
@@ -136,48 +141,139 @@ function fluidVars(pal) {
   const [c1, c2] = pal.g, dk = (h, k) => mixHex(h, '#000000', k), rgba = (h, a) => `rgba(${hexRgb(h).join(',')},${a})`;
   return {
     '--mg-cover': `linear-gradient(180deg, ${dk(c2, .6)} 0%, ${dk(c2, .2)} 55%, ${mixHex(c1, c2, .4)} 100%)`,
-    '--mg-card': `linear-gradient(180deg, ${dk(c2, .65)} 0%, ${dk(c2, .35)} 100%)`,
+    '--mg-card': `linear-gradient(180deg, ${dk(c2, .62)} 0%, ${dk(c2, .28)} 55%, ${mixHex(c1, c2, .25)} 100%)`,
     '--mg-blob': `radial-gradient(circle at 35% 30%, ${c1} 0, ${mixHex(c1, c2, .5)} 38%, ${rgba(c2, 0)} 72%)`,
     '--oc-cover': `linear-gradient(180deg, ${mixHex(c1, '#ffffff', .2)} 0%, ${c1} 30%, ${c2} 100%)`,
-    '--oc-card': `linear-gradient(180deg, ${dk(c2, .35)} 0%, ${dk(c2, .55)} 100%)`,
+    '--oc-card': `linear-gradient(180deg, ${mixHex(c1, c2, .5)} 0%, ${mixHex(c1, c2, .78)} 45%, ${dk(c2, .25)} 100%)`,
     '--ow1': 'rgba(255,255,255,.22)', '--ow2': rgba(dk(c2, .1), .55), '--ow3': rgba(dk(c2, .35), .85),
     // Brasas
     '--em-cover': `radial-gradient(ellipse at 50% 120%, ${mixHex(c1, c2, .35)} 0, ${dk(c2, .3)} 40%, ${dk(c2, .8)} 85%)`,
-    '--em-card': `linear-gradient(180deg, ${dk(c2, .8)} 0%, ${dk(c2, .5)} 100%)`,
+    '--em-card': `radial-gradient(ellipse at 50% 120%, ${mixHex(c1, c2, .45)} 0, ${dk(c2, .38)} 45%, ${dk(c2, .72)} 90%)`,
     '--em-dot': mixHex(c1, '#ffffff', .35), '--em-glow': rgba(c1, .75),
-    // Rio de lava
-    // Erupção
-    '--er-cover': `linear-gradient(180deg, ${dk(c2, .9)} 0%, ${dk(c2, .65)} 70%, ${dk(c2, .35)} 100%)`,
-    '--er-card': `linear-gradient(180deg, ${dk(c2, .85)} 0%, ${dk(c2, .5)} 100%)`,
-    '--er-glow': `radial-gradient(circle, ${c1} 0, ${mixHex(c1, c2, .45)} 35%, ${rgba(c2, 0)} 70%)`,
-    '--er-spark': mixHex(c1, '#ffffff', .4), '--er-sparkglow': rgba(c1, .8),
     // Crosta rachada
-    '--cr-cover': `radial-gradient(circle at 50% 60%, ${dk(c2, .8)}, ${dk(c2, .93)})`, '--cr-card': dk(c2, .86), '--cr-line': c1,
+    '--cr-cover': `radial-gradient(circle at 50% 60%, ${dk(c2, .8)}, ${dk(c2, .93)})`, '--cr-card': `radial-gradient(circle at 50% 60%, ${dk(c2, .7)}, ${dk(c2, .88)})`, '--cr-line': c1,
+    // Corações
+    '--ht-cover': `linear-gradient(180deg, ${dk(c2, .82)} 0%, ${dk(mixHex(c1, c2, .5), .45)} 100%)`, '--ht-card': `linear-gradient(180deg, ${dk(c2, .75)} 0%, ${dk(mixHex(c1, c2, .5), .35)} 100%)`,
+    '--ht-a': mixHex(c1, '#ffffff', .3), '--ht-b': mixHex(c1, '#ffffff', .7),
+    '--hg-card': 'var(--ht-card)',
+    '--ne-cover': dk(c2, .9), '--ne-card': `radial-gradient(circle at 85% 50%, ${dk(c2, .62)}, ${dk(c2, .86)} 70%)`, '--ne-a': c1, '--ne-b': pal.a2, '--ne-ga': rgba(c1, .8), '--ne-gb': rgba(pal.a2, .8),
+    '--cl-cover': `linear-gradient(180deg, ${dk(c2, .55)} 0%, ${dk(mixHex(c1, c2, .5), .25)} 100%)`, '--cl-card': `linear-gradient(180deg, ${dk(c2, .5)} 0%, ${dk(mixHex(c1, c2, .5), .12)} 100%)`,
+    '--ra-cover': `linear-gradient(180deg, ${dk(c2, .88)} 0%, ${dk(c2, .62)} 100%)`, '--ra-card': `linear-gradient(180deg, ${dk(c2, .8)} 0%, ${dk(c2, .5)} 100%)`, '--ra-a': 'rgba(255,255,255,.55)', '--ra-b': rgba(c1, .6),
+    '--mb-cover': dk(c2, .8), '--mb-card': dk(c2, .7), '--mb-vein': c1,
+    '--pp-cover': (b => `linear-gradient(40deg, transparent 0 38%, rgba(0,0,0,.18) 38% 39%, transparent 39% 64%, rgba(255,255,255,.1) 64% 65%, transparent 65%), linear-gradient(115deg, ${dk(b, .5)} 0 28%, ${dk(b, .38)} 28% 50%, ${dk(b, .62)} 50% 71%, ${dk(b, .5)} 71%)`)(mixHex(c1, c2, .5)),
+    '--pp-card': 'var(--pp-cover)',      // o cartão leva as mesmas facetas e vincos do fundo
+    // Aquário e finanças
+    '--kl-cover': 'var(--jl-cover)', '--kl-card': 'var(--jl-card)', '--kl-a': mixHex(c1, '#ffffff', .25), '--kl-b': mixHex(c1, c2, .5),
+    '--jl-cover': `linear-gradient(180deg, ${dk(mixHex(c1, c2, .5), .45)} 0%, ${dk(c2, .88)} 100%)`, '--jl-card': `linear-gradient(180deg, ${dk(mixHex(c1, c2, .5), .4)} 0%, ${dk(c2, .8)} 100%)`, '--jl-a': mixHex(c1, '#ffffff', .45), '--jl-b': mixHex(c1, '#ffffff', .85),
+    '--bs-cover': `repeating-linear-gradient(180deg, transparent 0 29px, rgba(255,255,255,.07) 29px 30px), ${dk(c2, .9)}`, '--bs-card': `linear-gradient(${dk(c2, .88)}, ${dk(c2, .88)})`, '--bs-a': c1, '--bs-b': mixHex(c1, '#ffffff', .5),
+    '--lc-card': 'var(--bs-card)',
   };
 }
-const WAVE_D = ['M0 70 Q100 40 200 70 T400 70 T600 70 T800 70 V150 H0Z', 'M0 95 Q100 65 200 95 T400 95 T600 95 T800 95 V150 H0Z', 'M0 118 Q100 92 200 118 T400 118 T600 118 T800 118 V150 H0Z'];
-const EMBERS = [[12, 5, 12, -.4, 5], [24, 8, -14, -2.1, 6.4], [33, 4, 18, -3.3, 5], [45, 7, -10, -1.2, 5.6], [55, 5, 16, -4.1, 5], [64, 9, -18, -2.7, 7], [73, 4, 10, -.9, 5], [82, 6, -12, -3.8, 5.2], [91, 5, 14, -1.8, 5]];   // [esquerda %, tamanho px, desvio px, atraso s, duração s]
-const SPARKS = [[-60, -120, 0], [30, -135, -.6], [72, -105, -1.2], [-20, -145, -1.8]];
-const CRACKS = [['l1', '<path class="crk" stroke-width="3" d="M0 120 L40 100 L70 112 L110 82 L150 95 L190 60 L230 74 L300 40"/><path class="crk" stroke-width="2" d="M110 82 L120 50 L150 30"/>'],
-  ['l2', '<path class="crk" stroke-width="3" d="M20 150 L60 130 L100 140 L140 118 L180 132 L240 100 L300 112"/><path class="crk" stroke-width="2" d="M190 60 L210 30 L250 15"/>']];
-function fluidInner(kind) {                         // os elementos que se mexem em cada estilo animado
+// Cada elemento tem o nível (1–5) a partir do qual aparece: no nível 3 há os de sempre, abaixo há menos e acima há mais.
+const upTo = (list, lvl) => list.filter(x => x.l <= lvl);
+const WAVES = [{ n: 4, y: 55, l: 4 }, { n: 1, y: 70, l: 3 }, { n: 2, y: 95, l: 2 }, { n: 5, y: 106, l: 5 }, { n: 3, y: 118, l: 1 }]
+  .map(w => ({ ...w, d: 'M0 ' + w.y + ' Q100 ' + (w.y - 28) + ' 200 ' + w.y + ' T400 ' + w.y + ' T600 ' + w.y + ' T800 ' + w.y + ' V150 H0Z' }));
+const MG_BLOBS = [[92, 12, -30, 1, 9, 0, 2], [128, 42, -60, 2, 12, -4, 1], [70, 72, -24, 1, 8, -2, 1], [56, 28, -20, 2, 10, -7, 3], [100, 84, -50, 2, 13, -9, 3],
+  [80, 56, -40, 1, 11, -5, 4], [64, 4, -26, 2, 9, -3, 4], [76, 92, -30, 1, 10, -6, 5]].map(([w, left, bottom, k, dur, delay, l]) => ({ w, left, bottom, k, dur, delay, l }));   // [tamanho, esquerda %, fundo px, tipo de subida, duração, atraso, nível]
+const MG_BUBBLES = [[7, 20, 5, 0, 3], [5, 52, 6.5, -2, 1], [9, 66, 7.5, -4, 3], [6, 90, 5.5, -1, 2], [6, 38, 6, -3, 4], [8, 78, 7, -5, 4], [5, 8, 5.8, -1.5, 5]]
+  .map(([w, left, dur, delay, l]) => ({ w, left, dur, delay, l }));
+const EMBERS = [[12, 5, 12, -.4, 5, 2], [24, 8, -14, -2.1, 6.4, 1], [33, 4, 18, -3.3, 5, 3], [45, 7, -10, -1.2, 5.6, 2], [55, 5, 16, -4.1, 5, 3], [64, 9, -18, -2.7, 7, 1], [73, 4, 10, -.9, 5, 3], [82, 6, -12, -3.8, 5.2, 2], [91, 5, 14, -1.8, 5, 1],
+  [18, 6, -9, -5.2, 5.4, 4], [38, 5, 11, -2.4, 6, 4], [60, 4, -13, -3.6, 5, 4], [69, 7, 9, -.6, 6.6, 5], [86, 5, -8, -4.6, 5.8, 5], [8, 4, 14, -1.4, 5.2, 5]].map(([left, size, dx, delay, dur, l]) => ({ left, size, dx, delay, dur, l }));   // [esquerda %, tamanho px, deslocação lateral, atraso, duração, nível]
+const CRACKS = [['l1', '<path class="crk" stroke-width="3" d="M0 120 L40 100 L70 112 L110 82 L150 95 L190 60 L230 74 L300 40"/>', 1],
+  ['l2', '<path class="crk" stroke-width="3" d="M20 150 L60 130 L100 140 L140 118 L180 132 L240 100 L300 112"/>', 2],
+  ['l1', '<path class="crk" stroke-width="2" d="M110 82 L120 50 L150 30"/>', 3],
+  ['l2', '<path class="crk" stroke-width="2" d="M190 60 L210 30 L250 15"/>', 3],
+  ['l1', '<path class="crk" stroke-width="2.5" d="M300 130 L260 115 L230 128 L200 104 L170 112 L150 90"/>', 4],
+  ['l2', '<path class="crk" stroke-width="2" d="M60 20 L90 45 L80 70 L115 85"/>', 4],
+  ['l1', '<path class="crk" stroke-width="2" d="M0 60 L35 70 L60 55 L95 62"/>', 5],
+  ['l2', '<path class="crk" stroke-width="2" d="M300 90 L270 80 L255 55 L220 48"/>', 5]].map(([c, p, l]) => ({ c, p, l }));
+// ---- Estilos novos (Néon, Nuvens, Chuva, Mármore, Papel): mesma regra dos outros (parados por defeito; mexem com as animações ligadas).
+// Posições bem espalhadas em qualquer número de elementos (sequência R2), e o nível a partir do qual cada elemento aparece (limiares = quantos há em cada nível 1–5).
+const R2 = i => [(0.5 + 0.7548776662 * (i + 1)) % 1, (0.5 + 0.5698402910 * (i + 1)) % 1];
+const gen = (thr, f) => Array.from({ length: thr[thr.length - 1] }, (_, i) => { const [u, v] = R2(i); return { l: thr.findIndex(n => i < n) + 1, ...f(i, u, v) }; });
+const NEON_RINGS = [0, 1, 2, 3, 4].map(i => ({ l: i + 1, i, r: [12, 22, 32, 42, 54][i] }));
+const NEON_LINES = [{ y: 80, l: 2, k: 0 }, { y: 20, l: 3, k: 1 }, { y: 50, l: 5, k: 0 }];
+const CLOUDS = [[12, 100, 32, 18, -5, 1, 20], [66, 140, 38, 24, -14, 1, 70], [104, 90, 28, 15, -2, 2, 40], [36, 80, 26, 13, -9, 3, 85], [84, 120, 34, 20, -17, 4, 15], [0, 70, 22, 12, -7, 4, 55], [120, 110, 30, 19, -11, 5, 30], [50, 150, 40, 26, -20, 5, 75]]
+  .map(([top, w, h, dur, delay, l, cx]) => ({ top, w, h, dur, delay, l, cx }));
+const RAIN = gen([10, 16, 24, 34, 48], (i, u, v) => ({ x: 2 + u * 96, h: 14 + ((i * 3) % 3) * 6, dur: .8 + ((i * 7) % 5) * .12, delay: -(v * 1.5) }));
+const MARBLE = [[1, 2.5, 'M0 110 C50 95 70 60 120 70 S200 40 250 48 S290 30 300 28'], [1, 1.5, 'M40 150 C70 120 110 126 150 104 S230 92 290 70'], [2, 2, 'M200 150 C220 128 250 118 300 122'],
+  [3, 1.5, 'M0 40 C40 50 70 30 110 34 S170 20 200 10'], [4, 1.5, 'M90 0 C100 30 80 50 110 76 S120 110 100 150'], [5, 1.2, 'M250 0 C240 30 270 50 255 80 S280 110 270 150']]
+  .map(([l, w, d], i) => ({ l, w, d, c: i % 2 ? 'm2' : 'm1' }));
+const SHEENS = [{ l: 1, x: 30 }, { l: 3, x: 62 }, { l: 4, x: 12 }, { l: 5, x: 80 }];
+// Corações a cintilar: tamanho em px, posição em %, e o nível a partir do qual cada um aparece
+const HEART_PATH = 'M12 21s-7.5-4.6-9.6-9.2C.9 8.2 3 5 6.2 5c2 0 3.5 1.1 4.3 2.4h3C14.3 6.1 15.8 5 17.8 5 21 5 23.1 8.2 21.6 11.8 19.5 16.4 12 21 12 21z';
+const HEART_LATTICE = Array.from({ length: 6 }, (_, row) => Array.from({ length: row % 2 ? 9 : 10 }, (_, col) => ({ x: (row % 2 ? 10 : 5) + col * 10, y: 10 + row * 16 }))).flat();   // grelha centrada: as linhas ficam simétricas em relação ao meio
+const HEARTS_CARD = lvl => Array.from({ length: [5, 8, 11, 13, 15][lvl - 1] }, (_, i) => { const k = (i * 7) % 15, c = k % 3, r = Math.floor(k / 3); return { x: 84 + ((c - 1) + (r % 2 ? .25 : -.25)) * 9.5, y: 18 + r / 4 * 64, s: 18, dx: 0, r: 0, dur: 1.4 + ((i * 7) % 5) * .3, delay: -((i * .37) % 3) }; });   // nos cartões: uma coluna à direita, o lado do texto fica livre
+const HEARTS = {
+  hgrid: gen([10, 18, 32, 44, 57], (i) => { const p = HEART_LATTICE[(i * 37) % 57]; return { x: p.x, y: p.y, s: 23, dx: 0, r: 0, dur: 1.4 + ((i * 7) % 5) * .3, delay: -((i * .37) % 3) }; }),
+};
+// Aquário (Medusas, Cardume) e Finanças (Barras, Linha de gráfico): tudo com nível 1–5 de "Quantidade"
+const BAR_N = [5, 7, 9, 12, 16], LINE_N = [5, 7, 9, 12, 16];
+const barsFor = lvl => Array.from({ length: BAR_N[lvl - 1] }, (_, i) => ({ x: (i + .5) / BAR_N[lvl - 1] * 100, w: 55 / BAR_N[lvl - 1], h: 26 + ((i * 37 + lvl * 5) % 11) / 10 * 64, dur: 1.8 + ((i * 7) % 5) * .3, delay: -((i * .43) % 3) }));
+const linePts = lvl => { const n = LINE_N[lvl - 1], P = Array.from({ length: n }, (_, i) => ({ x: i / (n - 1) * 300, y: Math.min(128, Math.max(22, 78 + 34 * Math.sin(i / (n - 1) * Math.PI * 3 + .6) + (R2(i + 1)[0] - .5) * 30)) })); P[n - 1].y = P[0].y; return P; };   // periódica: o fim encaixa no princípio
+// Medusas (profundidade): camada de trás (pequenas, quase apagadas, lentas) + camada da frente (maiores, mais nítidas, com brilho). Nos cartões ficam na coluna da direita.
+const JELLY = [
+  ...gen([2, 4, 6, 8, 10], (i, u, v) => ({ x: 8 + u * 84, w: 14 + (i % 2) * 4, dur: 18 + v * 6, delay: -(v * 24), dx: (u - .5) * 20, far: true, y: 15 + v * 70 })),
+  ...gen([1, 2, 3, 4, 5], (i, u, v) => ({ x: [78, 18, 52, 90, 36][i], w: 34 + (i % 2) * 10, dur: 10 + v * 3, delay: -(v * 13), dx: (u - .5) * 30, far: false, y: 25 + v * 55 })),
+];
+const jellyX = (j, card) => card ? 72 + (j.x - 8) / 84 * 24 : j.x;
+// Algas e bolhas: algas a balançar (nos cantos da capa, na coluna da direita do cartão) e bolhas a subir
+const KELP_W = [3, 94, 9, 87, 15, 80, 21, 73].map((x, i) => ({ x, cx: [95, 72, 88, 80, 92, 76, 84, 68][i], l: [1, 1, 2, 3, 4, 4, 5, 5][i], h: 40 + ((i * 37) % 5) * 6, dur: 3 + ((i * 7) % 5) * .4, k: i % 2 }));
+const KELP_B = gen([4, 6, 9, 12, 16], (i, u, v) => ({ x: 4 + u * 92, s: 4 + (i % 3) * 2, dur: 4 + v * 4, delay: -(v * 8) }));
+const kelpPath = h => 'M8 ' + h + ' C0 ' + (h * .7) + ' 16 ' + (h * .5) + ' 8 ' + (h * .25) + ' C4 ' + (h * .12) + ' 10 0 8 0';
+const JELLY_SVG = (a, b, sc) => `<g transform='scale(${sc})'><path d='M4 24 C4 4 36 4 36 24Z' fill='${a}'/><path d='M10 24 C10 12 30 12 30 24Z' fill='${b}' fill-opacity='.6'/><g stroke='${a}' stroke-width='1.8' fill='none' stroke-linecap='round'><path d='M10 24 Q6 36 10 46'/><path d='M16 24 Q20 38 15 52'/><path d='M24 24 Q20 38 25 52'/><path d='M30 24 Q34 36 30 46'/></g></g>`;
+function fluidInner(kind, lvl = fxLevel(appliedTheme), foot = false, card = false) {      // os elementos que se mexem em cada estilo animado
   switch (kind) {
-    case 'magma': return [1, 2, 3, 4, 5].map(i => `<i class="bl b${i}"></i>`).join('') + [1, 2, 3, 4].map(i => `<i class="bb bb${i}"></i>`).join('');
-    case 'embers': return EMBERS.map(([l, s, dx, d, t]) => `<i class="em" style="left:${l}%;width:${s}px;height:${s}px;--dx:${dx}px;animation-delay:${d}s;animation-duration:${t}s"></i>`).join('');
-    case 'eruption': return '<i class="glow"></i>' + SPARKS.map(([dx, dy, d]) => `<i class="sp" style="--dx:${dx}px;--dy:${dy}px;animation-delay:${d}s"></i>`).join('');
-    case 'crust': return `<svg viewBox="0 0 300 150" preserveAspectRatio="none" aria-hidden="true">${CRACKS.map(([c, p]) => `<g class="${c}">${p}</g>`).join('')}</svg>`;
-    default: return WAVE_D.map((d, i) => `<svg class="wv w${i + 1}" viewBox="0 0 800 150" preserveAspectRatio="none" aria-hidden="true"><path class="wp${i + 1}" d="${d}"/></svg>`).join('');   // ondas
+    case 'magma': return upTo(MG_BLOBS, lvl).map(b => '<i class="bl" style="width:' + b.w + 'px;height:' + b.w + 'px;left:' + b.left + '%;margin-left:-' + b.w / 2 + 'px;bottom:' + b.bottom + 'px;animation:mgRise' + b.k + ' ' + b.dur + 's ease-in-out ' + b.delay + 's infinite"></i>').join('')
+      + upTo(MG_BUBBLES, lvl).map(b => '<i class="bb" style="width:' + b.w + 'px;height:' + b.w + 'px;left:' + b.left + '%;animation:mgBub ' + b.dur + 's linear ' + b.delay + 's infinite"></i>').join('');
+    case 'embers': return upTo(EMBERS, lvl).map(e => '<i class="em" style="left:' + e.left + '%;width:' + e.size + 'px;height:' + e.size + 'px;--dx:' + e.dx + 'px;animation-delay:' + e.delay + 's;animation-duration:' + e.dur + 's"></i>').join('');
+    case 'hgrid':
+      return (card ? HEARTS_CARD(lvl) : upTo(HEARTS[kind], lvl)).map(h => '<i class="ht" style="left:' + h.x + '%;top:' + h.y + '%;margin:-' + h.s / 2 + 'px 0 0 -' + h.s / 2 + 'px;width:' + h.s + 'px;height:' + h.s + 'px;--dx:' + h.dx + 'px;--r:' + h.r + 'deg;animation-duration:' + h.dur + 's;animation-delay:' + h.delay + 's"></i>').join('');
+    case 'bars': return barsFor(lvl).map(b => '<i class="br" style="left:' + b.x + '%;width:' + b.w + '%;margin-left:-' + b.w / 2 + '%;height:' + Math.round(b.h * (foot ? 1.35 : 1)) + 'px;animation-duration:' + b.dur + 's;animation-delay:' + b.delay + 's"></i>').join('');
+    case 'linechart': {                              // duas voltas lado a lado; a faixa desliza uma volta e recomeça sem emenda (a linha sai pela direita e volta a entrar)
+      const P = linePts(lvl), PP = [...P, ...P.slice(1).map(p => ({ x: p.x + 300, y: p.y }))], pl = PP.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+      return '<div class="lc-track"><svg viewBox="0 0 600 150" preserveAspectRatio="none" aria-hidden="true"><path class="ar" d="M0 150 L' + PP.map(p => p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' L') + ' L600 150Z"/><polyline class="ln" points="' + pl + '"/></svg>'
+        + PP.map(p => '<i class="dt" style="left:' + (p.x / 6).toFixed(2) + '%;top:' + (p.y / 1.5).toFixed(2) + '%"></i>').join('') + '</div>'; }
+    case 'jelly': return upTo(JELLY, lvl).map(j => '<i class="jf ' + (j.far ? 'far' : 'near') + '" style="left:' + jellyX(j, card).toFixed(1) + '%;margin-left:-' + j.w / 2 + 'px;width:' + j.w + 'px;height:' + Math.round(j.w * 1.4) + 'px;--dx:' + j.dx.toFixed(1) + 'px;--o:' + (j.far ? .25 : .82) + ';animation-duration:' + j.dur + 's,2.6s;animation-delay:' + j.delay + 's,' + (j.delay / 3) + 's"></i>').join('');
+    case 'kelp': {
+      const k = card ? .8 : 1;
+      return KELP_W.filter(w => w.l <= lvl).map(w => { const h = Math.round(w.h * k); return '<svg class="wd" viewBox="0 0 16 ' + h + '" style="left:' + (card ? w.cx : w.x) + '%;width:16px;height:' + h + 'px;animation-duration:' + w.dur + 's;animation-delay:' + (-w.dur * (w.x % 3) / 3) + 's"><path d="' + kelpPath(h) + '" fill="none" stroke-width="5" stroke-linecap="round" style="stroke:var(--kl-' + (w.k ? 'b' : 'a') + ')"/></svg>'; }).join('')
+        + upTo(KELP_B, lvl).map(b => '<i class="bb" style="left:' + (card ? 64 + (b.x - 4) / 92 * 33 : b.x).toFixed(1) + '%;width:' + b.s + 'px;height:' + b.s + 'px;animation-duration:' + b.dur + 's;animation-delay:' + b.delay + 's"></i>').join('');
+    }
+    case 'crust': return '<svg viewBox="0 0 300 150" preserveAspectRatio="none" aria-hidden="true">' + upTo(CRACKS, lvl).map(c => '<g class="' + c.c + '">' + c.p + '</g>').join('') + '</svg>';
+    case 'neon': return upTo(NEON_RINGS, lvl).map(r => '<i class="rg ' + (r.i % 2 ? 'b' : 'a') + '" style="' + (card ? 'left:88%;top:50%;' : '') + 'animation-delay:' + (-r.i * .72) + 's"></i>').join('')
+      + upTo(NEON_LINES, lvl).map(n => '<i class="ln ' + (n.k ? 'b' : 'a') + '" style="' + (card ? 'left:55%;' : '') + 'top:' + n.y + '%;animation-delay:' + (-n.y / 30) + 's"></i>').join('');
+    case 'clouds': return upTo(CLOUDS, lvl).map((c, i) => '<i class="cd" style="top:' + (card ? (i % 2 ? 108 : -6) : c.top) + 'px;width:' + c.w + 'px;height:' + c.h + 'px;animation-duration:' + c.dur + 's;animation-delay:' + c.delay + 's"></i>').join('');
+    case 'rain': return upTo(RAIN, lvl).map(d => '<i class="dr' + (d.h > 20 ? ' b' : '') + '" style="left:' + d.x + '%;height:' + d.h + 'px;animation-duration:' + d.dur + 's;animation-delay:' + d.delay + 's"></i>').join('');
+    case 'marble': return '<svg viewBox="0 0 300 150" preserveAspectRatio="none" aria-hidden="true">' + upTo(MARBLE, lvl).map(v => '<g class="' + v.c + '"><path class="mv" stroke-width="' + v.w + '" d="' + v.d + '"/></g>').join('') + '</svg>';
+    case 'paper': return upTo(SHEENS, lvl).map((s, i) => '<i class="sh" style="left:' + (s.x - 40) + '%;animation-duration:' + (7 + i * 2) + 's;animation-delay:' + (-i * 3) + 's"></i>').join('');
+    default: return upTo(WAVES, lvl).map(w => '<svg class="wv w' + w.n + '" viewBox="0 0 800 150" preserveAspectRatio="none" aria-hidden="true"><path class="wp' + w.n + '" d="' + w.d + '"/></svg>').join('');   // ondas
   }
 }
 const svgUri = s => 'data:image/svg+xml,' + encodeURIComponent(s).replace(/'/g, '%27').replace(/\(/g, '%28').replace(/\)/g, '%29');
 const fluidMotion = t => ALWAYS_ANIM.includes(t.style) && !!t.anim && !matchMedia('(prefers-reduced-motion: reduce)').matches;   // este estilo deve mexer-se agora?
-function decorateTotals() {                         // nos cartões de total (os que têm gradiente), acrescenta a camada do estilo animado e tira-a se o estilo mudar ou as animações se desligarem
-  const kind = appliedTheme.cardStyle && fluidMotion(appliedTheme) ? appliedTheme.style : null;
+const CLASSIC_CARD = ['pixel', 'aurora', 'grid', 'conic'];       // estilos "normais" que também animam nos cartões (a camada roda/desliza como na capa)
+const classicCardMotion = t => !!t.cardStyle && !!t.anim && !ALWAYS_ANIM.includes(t.style) && CLASSIC_CARD.includes(t.style) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+const FOOT_KINDS = ['bars', 'linechart'];      // nos cartões não ficam bem a ocupar tudo: têm o seu próprio "rodapé suave" (faixa em baixo, esbatida), sobre o gradiente normal do cartão
+function decorateTotals() {                         // nos cartões de total, acrescenta a camada do estilo animado e tira-a se o estilo mudar ou as animações se desligarem
+  const t = appliedTheme, foot = t.cardStyle && FOOT_KINDS.includes(t.style) ? t.style : null;
+  const fk = !foot && t.cardStyle && fluidMotion(t) ? t.style : null, ck = classicCardMotion(t) ? t.style : null;
+  const kind = foot || fk || ck, key = foot ? fxLevel(t) + (t.anim ? 'a' : 's') : fk ? String(fxLevel(t)) : ck ? t.palette : '';
   document.querySelectorAll('.big-total').forEach(c => {
     const cur = c.querySelector(':scope > .cv-card');
-    if (cur && cur.dataset.k === kind) return;
+    if (cur && cur.dataset.k === kind && cur.dataset.n === key) return;
     cur?.remove();
-    if (kind) c.insertAdjacentHTML('afterbegin', `<div class="cv cv-card cv-${kind}" data-k="${kind}">${fluidInner(kind)}</div>`);
+    if (foot) c.insertAdjacentHTML('afterbegin', `<div class="cv-card cv-foot" data-k="${foot}" data-n="${key}"${t.anim ? '' : ' data-still="1"'}><div class="ft">${fluidInner(foot, fxLevel(t), true)}</div></div>`);
+    else if (fk) c.insertAdjacentHTML('afterbegin', `<div class="cv cv-card cv-${fk}" data-k="${fk}" data-n="${key}">${fluidInner(fk, +key, false, true)}</div>`);
+    else if (ck) { const wr = document.createElement('div'); wr.className = 'cv-card cvw'; wr.dataset.k = ck; wr.dataset.n = key; const d = document.createElement('div'); d.className = 'cvc'; d.dataset.k = ck; d.style.background = coverLayer(ck, palOf(t.palette)); wr.appendChild(d); c.prepend(wr); }
+  });
+  // Animação padrão do cartão (com as animações ligadas): duas manchas de cor, uma de cada cor da paleta, a deslizar devagar uma contra a outra.
+  const drift = !!t.anim && !fk && !ck && !(t.cardStyle && t.style === 'solid');
+  document.querySelectorAll('.big-total').forEach(c => {
+    const d = c.querySelector(':scope > .cv-drift');
+    if (!drift) { d?.remove(); return; }
+    if (!d) c.prepend(Object.assign(document.createElement('div'), { className: 'cv-drift', innerHTML: '<i></i><i></i>' }));
+    else if (c.firstElementChild !== d) c.prepend(d);                              // fica sempre por baixo das outras camadas
   });
 }
 /* Capa animada: em vez de redesenhar o fundo a cada fotograma, há uma camada (.cv) que a placa gráfica roda, desliza ou amplia (só transform).
@@ -192,39 +288,96 @@ function coverLayer(style, pal) {
     default: return `linear-gradient(135deg, ${c1} 35%, ${c2} 65%)`;       // gradiente
   }
 }
-function themeBg(style, pal, small = false) {     // o "fundo de destaque" de cada estilo (valor de `background`); small = miniatura da lista
+function themeBg(style, pal, small = false, card = false) {     // o "fundo de destaque" de cada estilo (valor de `background`); small = miniatura da lista
   const [c1, c2] = pal.g, lin = `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`, w = a => `rgba(255,255,255,${a})`;
   switch (style) {
     case 'solid': return pal.s;
     case 'pixel': return `url(${pixelGradient(c1, c2)}) center / 100% 100% no-repeat`;
     case 'aurora': return `radial-gradient(circle at 12% 18%, ${c1} 0, transparent 58%), radial-gradient(circle at 88% 22%, ${c2} 0, transparent 58%), radial-gradient(circle at 55% 105%, ${pal.a2} 0, transparent 62%), ${mixHex(c1, c2)}`;
     case 'grid': return `linear-gradient(${w(.22)} 1px, transparent 1px) 0 0 / 12px 12px, linear-gradient(90deg, ${w(.22)} 1px, transparent 1px) 0 0 / 12px 12px, ${lin}`;
-    case 'conic': return `conic-gradient(from 210deg at 30% 30%, ${c1}, ${c2}, ${c1})`;
+    case 'conic': return `conic-gradient(from 210deg at ${card ? 80 : 50}% 50%, ${c1}, ${c2}, ${c1})`;
     // Imagens paradas (miniaturas da lista e cartões/capa sem animações). Os raios das bolhas estão em % do tamanho da caixa, por isso escalam do mosaico pequeno ao cartão grande.
-    case 'magma': {
-      const dk = (h, k) => mixHex(h, '#000000', k), core = mixHex(c1, '#ffffff', .25), edge = mixHex(c1, c2, .5);
-      const blob = (x, y, r) => `radial-gradient(circle at ${x}% ${y}%, ${core} 0, ${c1} ${r * .35}%, ${edge} ${r * .7}%, transparent ${r}%)`;
-      return `${blob(20, 88, 24)}, ${blob(52, 104, 30)}, ${blob(82, 86, 21)}, ${blob(36, 52, 14)}, ${blob(70, 36, 12)}, linear-gradient(180deg, ${dk(c2, .6)} 0%, ${dk(c2, .25)} 55%, ${mixHex(c1, c2, .45)} 100%)`;
+    case 'magma': {      // a mesma imagem do fundo animado: bolhas grandes com brilho no canto, bolinhas pequenas e o mesmo degradê
+      const dk = (h, k) => mixHex(h, '#000000', k), mid = mixHex(c1, c2, .5), lv = fxLevel(appliedTheme), yb = small ? 92 : 88.5;
+      const blobs = upTo(MG_BLOBS, lv).map((b, i) => { const r = b.w / 2 / 1.95, lift = ((i * 37) % 5) / 5 * 60; return `<circle cx='${(b.left * 2).toFixed(1)}' cy='${(yb - (b.bottom + b.w / 2 + lift) / 1.95).toFixed(1)}' r='${r.toFixed(1)}' fill='url(#g)' fill-opacity='.95'/>`; }).join('');
+      const bubs = upTo(MG_BUBBLES, lv).map((b, i) => `<circle cx='${(b.left * 2).toFixed(1)}' cy='${(yb - 14 - ((i * 53) % 9) * 6).toFixed(1)}' r='${(b.w / 2 / 1.95 * 1.6).toFixed(1)}' fill='#fff' fill-opacity='.5'/>`).join('');
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'><defs><radialGradient id='g' cx='.35' cy='.3' r='.955'><stop offset='0' stop-color='${c1}'/><stop offset='.38' stop-color='${mid}'/><stop offset='.72' stop-color='${c2}' stop-opacity='0'/></radialGradient></defs>${blobs}${bubs}</svg>`;
+      return `url(${svgUri(svg)}) center / 100% 100% no-repeat, linear-gradient(180deg, ${dk(c2, .6)} 0%, ${dk(c2, .2)} 55%, ${mixHex(c1, c2, .4)} 100%)`;
     }
     case 'ocean': {
       const dk = (h, k) => mixHex(h, '#000000', k), rgba = (h, a) => `rgba(${hexRgb(h).join(',')},${a})`;
       const fills = ['rgba(255,255,255,.3)', rgba(dk(c2, .2), .55), rgba(dk(c2, .45), .88)];
-      const ys = [38, 58, 77];
-      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='none'>${ys.map((y, i) => `<path fill='${fills[i]}' d='M0 ${y} Q25 ${y - 17} 50 ${y} T100 ${y} T150 ${y} T200 ${y} V100 H0Z'/>`).join('')}</svg>`;
+      const ws = upTo([{ y: 28, f: 0, l: 4 }, { y: 38, f: 0, l: 3 }, { y: 58, f: 1, l: 2 }, { y: 68, f: 1, l: 5 }, { y: 77, f: 2, l: 1 }], fxLevel(appliedTheme));
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='none'>${ws.map(({ y, f }) => `<path fill='${fills[f]}' d='M0 ${y} Q25 ${y - 17} 50 ${y} T100 ${y} T150 ${y} T200 ${y} V100 H0Z'/>`).join('')}</svg>`;
       return `url(${svgUri(svg)}) center / 100% 100% no-repeat, linear-gradient(180deg, ${mixHex(c1, '#ffffff', .2)} 0%, ${c1} 30%, ${c2} 100%)`;
     }
     case 'embers': {
       const dk = (h, k) => mixHex(h, '#000000', k), dot = mixHex(c1, '#ffffff', .4), glow = `rgba(${hexRgb(c1).join(',')},.55)`;
       const e = (x, y, r) => `radial-gradient(circle at ${x}% ${y}%, ${dot} 0 ${r}px, ${glow} ${r + 1}px, transparent ${r + 6}px)`;
-      return `${e(16, 66, 2)}, ${e(33, 40, 1.5)}, ${e(50, 74, 2.5)}, ${e(64, 30, 1.5)}, ${e(78, 58, 2)}, ${e(90, 22, 1.5)}, radial-gradient(ellipse at 50% 125%, ${mixHex(c1, c2, .35)} 0, ${dk(c2, .35)} 45%, ${dk(c2, .8)} 90%)`;
+      const es = upTo([[33, 40, 1.5, 1], [78, 58, 2, 1], [16, 66, 2, 2], [64, 30, 1.5, 2], [50, 74, 2.5, 3], [90, 22, 1.5, 3], [8, 30, 1.5, 4], [42, 82, 2, 4], [70, 70, 1.5, 4], [24, 18, 1.5, 5], [58, 50, 2, 5], [84, 80, 2, 5]].map(([x, y, r, l]) => ({ x, y, r, l })), fxLevel(appliedTheme));
+      return `${es.map(q => e(q.x, q.y, q.r)).join(', ')}, radial-gradient(ellipse at 50% 125%, ${mixHex(c1, c2, .35)} 0, ${dk(c2, .35)} 45%, ${dk(c2, .8)} 90%)`;
     }
-    case 'eruption': {
-      const dk = (h, k) => mixHex(h, '#000000', k), sp = mixHex(c1, '#ffffff', .4);
-      return `radial-gradient(circle at 38% 38%, ${sp} 0 2px, transparent 3px), radial-gradient(circle at 63% 26%, ${sp} 0 2px, transparent 3px), radial-gradient(circle at 50% 122%, ${c1} 0, ${mixHex(c1, c2, .45)} 30%, transparent 62%), linear-gradient(180deg, ${dk(c2, .9)} 0%, ${dk(c2, .65)} 70%, ${dk(c2, .35)} 100%)`;
+    case 'hgrid': {      // corações: imagem parada com tantos corações quantos o nível de "Quantidade"
+      const dk = (h, k) => mixHex(h, '#000000', k), a = mixHex(c1, '#ffffff', .3), b = mixHex(c1, '#ffffff', .7);
+      const items = (card ? HEARTS_CARD(fxLevel(appliedTheme)) : upTo(HEARTS[style], fxLevel(appliedTheme))).filter((p, i) => !small || i % 2 === 0);
+      const hs = items.map((p, i) => { const sc = (p.s / 1.95 / 24) * (small ? 1.55 : 1), op = i % 2 ? .45 : .9;
+        return `<path fill='${i % 3 ? a : b}' fill-opacity='${op}' transform='translate(${(p.x * 2).toFixed(1)} ${(style === 'hgrid' ? p.y : 6 + p.y * .88).toFixed(1)}) rotate(${Math.round(p.r)}) scale(${sc.toFixed(3)}) translate(-12 -12)' d='${HEART_PATH}'/>`; }).join('');
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'>${hs}</svg>`;
+      return `url(${svgUri(svg)}) center / 100% 100% no-repeat, linear-gradient(180deg, ${dk(c2, .82)} 0%, ${dk(mixHex(c1, c2, .5), .45)} 100%)`;
+    }
+    case 'jelly': {      // miniaturas nítidas, desenhadas em vetor: as de trás apagadas, as da frente nítidas
+      const dk = (h, k) => mixHex(h, '#000000', k), a = mixHex(c1, '#ffffff', .45), b = mixHex(c1, '#ffffff', .85);
+      const js = upTo(JELLY, fxLevel(appliedTheme)).sort((p, q) => (q.far ? 1 : 0) - (p.far ? 1 : 0)).map(j => { const sc = (j.w / 1.95 / 40) * (small ? 1.5 : 1); return `<g opacity='${j.far ? .3 : .9}' transform='translate(${(jellyX(j, card) * 2 - 20 * sc).toFixed(1)} ${(j.y - 10).toFixed(1)})'>${JELLY_SVG(a, b, sc.toFixed(3))}</g>`; }).join('');
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'>${js}</svg>`;
+      return `url(${svgUri(svg)}) center / 100% 100% no-repeat, linear-gradient(180deg, ${dk(mixHex(c1, c2, .5), .45)} 0%, ${dk(c2, .88)} 100%)`;
+    }
+    case 'kelp': {
+      const dk = (h, k) => mixHex(h, '#000000', k), A = mixHex(c1, '#ffffff', .25), B = mixHex(c1, c2, .5), lv = fxLevel(appliedTheme), yb = small ? 100 : 88.5, k = card ? .8 : 1, sc = (small ? 1.5 : 1) / 1.95;
+      const wd = KELP_W.filter(w => w.l <= lv).map(w => { const h = Math.round(w.h * k); return `<g transform='translate(${((card ? w.cx : w.x) * 2 - 8 * sc).toFixed(1)} ${(yb - h * sc).toFixed(1)}) scale(${sc.toFixed(3)})'><path d='${kelpPath(h)}' fill='none' stroke='${w.k ? B : A}' stroke-width='5' stroke-linecap='round'/></g>`; }).join('');
+      const bb = upTo(KELP_B, lv).filter((b, i) => !small || i % 2 === 0).map((b, i) => `<circle cx='${((card ? 64 + (b.x - 4) / 92 * 33 : b.x) * 2).toFixed(1)}' cy='${(yb - 14 - ((i * 53) % 9) * 7).toFixed(1)}' r='${(b.s / 2 * sc).toFixed(2)}' fill='none' stroke='#ffffff' stroke-opacity='.65' stroke-width='.6'/>`).join('');
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'>${wd}${bb}</svg>`;
+      return `url(${svgUri(svg)}) center / 100% 100% no-repeat, linear-gradient(180deg, ${dk(mixHex(c1, c2, .5), .45)} 0%, ${dk(c2, .88)} 100%)`;
+    }
+    case 'bars': case 'linechart': {
+      const dk = (h, k) => mixHex(h, '#000000', k), lv = fxLevel(appliedTheme), a = c1, b = mixHex(c1, '#ffffff', .5), dn = mixHex('#ff5a6a', c2, .2), by = 80;
+      const grid = [30, 55, 80].map(y => `<path d='M0 ${y}H200' stroke='#ffffff' stroke-opacity='.08' stroke-width='.6'/>`).join('');
+      let body = '';
+      if (style === 'bars') body = barsFor(lv).map((q, i) => { const w = q.w * 2 * .9, h = q.h / 1.95 * (small ? 1.1 : 1); return `<rect x='${(q.x * 2 - w / 2).toFixed(1)}' y='${(by - h).toFixed(1)}' width='${w.toFixed(1)}' height='${h.toFixed(1)}' rx='1' fill='${i % 3 ? a : b}'/>`; }).join('') + `<rect x='0' y='${by}' width='200' height='1.2' fill='${a}'/>`;
+      else { const P = linePts(lv).map(p => [p.x / 1.5, p.y / 1.5]); body = `<path d='M0 100 L${P.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L')} L200 100Z' fill='${a}' fill-opacity='.18'/><polyline points='${P.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')}' fill='none' stroke='${a}' stroke-width='${small ? 2.6 : 2.2}' stroke-linejoin='round' stroke-linecap='round'/>` + P.map(p => `<circle cx='${p[0].toFixed(1)}' cy='${p[1].toFixed(1)}' r='${small ? 2.6 : 2}' fill='${b}'/>`).join(''); }
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'>${grid}${body}</svg>`;
+      return `url(${svgUri(svg)}) center / 100% 100% no-repeat, ${dk(c2, .9)}`;
     }
     case 'crust': {
-      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 150' preserveAspectRatio='none'><g fill='none' stroke='${c1}' stroke-linecap='round' stroke-linejoin='round'>${CRACKS.map(c => c[1]).join('')}</g></svg>`;
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 150' preserveAspectRatio='none'><g fill='none' stroke='${c1}' stroke-linecap='round' stroke-linejoin='round'>${upTo(CRACKS, fxLevel(appliedTheme)).map(c => c.p).join('')}</g></svg>`;
       return `url(${svgUri(svg)}) center / 100% 100% no-repeat, radial-gradient(circle at 50% 60%, ${mixHex(c2, '#000000', .8)}, ${mixHex(c2, '#000000', .93)})`;
+    }
+    // Estilos novos: imagens paradas (as mesmas das miniaturas), com tantos elementos quantos o nível de "Quantidade"
+    case 'neon': {
+      const dk = (h, k) => mixHex(h, '#000000', k), lv = fxLevel(appliedTheme), A = c1, B = pal.a2;
+      const rr = card ? .55 : 1, rings = upTo(NEON_RINGS, lv).map(r => `radial-gradient(circle at ${card ? 88 : 50}% ${card ? 50 : 55}%, transparent 0 ${(r.r - 1.5) * rr}%, ${r.i % 2 ? B : A} ${r.r * rr}%, transparent ${(r.r + 3) * rr}%)`);
+      const lines = card ? [] : upTo(NEON_LINES, lv).map(n => `linear-gradient(transparent calc(${n.y}% - 1px), ${n.k ? B : A} calc(${n.y}% - 1px) calc(${n.y}% + 1px), transparent calc(${n.y}% + 1px))`);
+      return `${[...lines, ...rings].join(', ')}${lines.length || rings.length ? ', ' : ''}${dk(c2, .9)}`;
+    }
+    case 'clouds': {      // nuvens desenhadas nítidas (círculos e base arredondada, uma só transparência para o conjunto)
+      const dk = (h, k) => mixHex(h, '#000000', k), lv = fxLevel(appliedTheme);
+      const cl = upTo(CLOUDS, lv).map((c, i) => { const w = c.w / 1.95 * (small ? 1.25 : 1), h = c.h / 1.95 * (small ? 1.25 : 1), x = c.cx * 2 - w / 2, y = ((card ? (i % 2 ? 108 : -6) : c.top) + c.h / 2) / 1.5 - h / 2;
+        return `<g fill='#ffffff' opacity='${card ? .13 : .3}'><rect x='${x.toFixed(1)}' y='${y.toFixed(1)}' width='${w.toFixed(1)}' height='${h.toFixed(1)}' rx='${(h / 2).toFixed(1)}'/><circle cx='${(x + w * .36).toFixed(1)}' cy='${(y + h * .1).toFixed(1)}' r='${(h * .62).toFixed(1)}'/><circle cx='${(x + w * .62).toFixed(1)}' cy='${(y + h * .2).toFixed(1)}' r='${(h * .5).toFixed(1)}'/></g>`; }).join('');
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'>${cl}</svg>`;
+      return `url(${svgUri(svg)}) center / 100% 100% no-repeat, linear-gradient(180deg, ${dk(c2, .55)} 0%, ${dk(mixHex(c1, c2, .5), .25)} 100%)`;
+    }
+    case 'rain': {
+      const dk = (h, k) => mixHex(h, '#000000', k), lv = fxLevel(appliedTheme), gap = [38, 29, 22, 17, 13][lv - 1];
+      return `repeating-linear-gradient(78deg, transparent 0 ${gap}px, rgba(255,255,255,.38) ${gap}px ${gap + 1}px), repeating-linear-gradient(74deg, transparent 0 ${gap * 1.7}px, rgba(${hexRgb(c1).join(',')},.5) ${gap * 1.7}px ${gap * 1.7 + 1.5}px), linear-gradient(180deg, ${dk(c2, .88)} 0%, ${dk(c2, .62)} 100%)`;
+    }
+    case 'marble': {
+      const lv = fxLevel(appliedTheme);
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 150' preserveAspectRatio='none'><g fill='none' stroke='${c1}' stroke-linecap='round'>${upTo(MARBLE, lv).map(v => `<path stroke-width='${v.w}' d='${v.d}'/>`).join('')}</g></svg>`;
+      return `url(${svgUri(svg)}) center / 100% 100% no-repeat, ${mixHex(c2, '#000000', .8)}`;
+    }
+    case 'paper': {
+      const dk = (h, k) => mixHex(h, '#000000', k), lv = fxLevel(appliedTheme), b = mixHex(c1, c2, .5);
+      const sh = upTo(SHEENS, lv).map(s => `linear-gradient(105deg, transparent ${s.x - 4}%, rgba(255,255,255,.16) ${s.x}%, transparent ${s.x + 7}%)`);
+      return `${sh.join(', ')}${sh.length ? ', ' : ''}linear-gradient(40deg, transparent 0 38%, rgba(0,0,0,.18) 38% 39%, transparent 39% 64%, rgba(255,255,255,.1) 64% 65%, transparent 65%), linear-gradient(115deg, ${dk(b, .5)} 0 28%, ${dk(b, .38)} 28% 50%, ${dk(b, .62)} 50% 71%, ${dk(b, .5)} 71%)`;
     }
     default: return lin;
   }
@@ -236,7 +389,7 @@ function coverState(t) {                         // a capa do perfil pode ter o 
   const anim = fluid ? fluidMotion(t) : (!!t.anim && t.style !== 'solid');
   // animada: fundo fixo (gradiente liso) + uma camada .cv por cima, que o CSS mexe só com transform. Magma/Ondas…: o fundo vem do CSS e a camada tem vários elementos.
   return { cls: anim ? 'cover anim' : 'cover', gs: t.style, bg: anim && !fluid ? `linear-gradient(135deg, ${pal.g[0]} 0%, ${pal.g[1]} 100%)` : '',
-    layer: anim && !fluid ? coverLayer(t.style, pal) : '', inner: anim && fluid ? fluidInner(t.style) : '' };
+    layer: anim && !fluid ? coverLayer(t.style, pal) : '', inner: anim && fluid ? fluidInner(t.style, fxLevel(t)) : '' };
 }
 const coverHTML = s => `<div class="${s.cls}" data-gs="${s.gs}"${s.bg ? ` style="background:${s.bg}"` : ''}>${s.inner ? `<div class="cv cv-${s.gs}">${s.inner}</div>` : s.layer ? `<div class="cv" style="background:${s.layer}"></div>` : ''}</div>`;
 function refreshCover(t) {
@@ -250,22 +403,27 @@ let appliedTheme = DEFAULT_THEME;
 function applyTheme(t, opts = {}) {
   t = validStyle({ ...DEFAULT_THEME, ...t }); appliedTheme = t;
   const pal = palOf(t.palette), r = document.documentElement;
-  const light = t.mode === 'light' || (t.mode === 'auto' && matchMedia('(prefers-color-scheme: light)').matches);
+  const light = t.mode === 'light' || t.mode === 'autolight';
   const flips = applyTheme.light !== undefined && applyTheme.light !== light;
   applyTheme.light = light;
   const run = () => {
-    if (t.mode === 'auto') delete r.dataset.mode; else r.dataset.mode = t.mode;             // sem atributo, segue o telemóvel
+    r.dataset.mode = light ? 'light' : 'dark';
+    // Auto escuro / Auto claro: o fundo, as caixas e as linhas ganham um toque leve da cor escolhida (nos outros modos ficam neutros)
+    const tint = t.mode === 'autodark' || t.mode === 'autolight', col = !light && pal.tintDark ? pal.tintDark : pal.s;
+    const tv = light ? { '--bg': mixHex('#f5f5f6', col, .09), '--surface': mixHex('#ffffff', col, .04), '--surface-2': mixHex('#eeeff1', col, .11), '--line': mixHex('#e2e3e7', col, .14) }
+      : { '--bg': mixHex('#0b0b0c', col, .07), '--surface': mixHex('#131314', col, .09), '--surface-2': mixHex('#1c1c1e', col, .105), '--line': mixHex('#27272a', col, .12) };
+    for (const [k, v] of Object.entries(tv)) { if (tint) r.style.setProperty(k, v); else r.style.removeProperty(k); }
     const acc = light ? pal.light : pal.dark;
     r.style.setProperty('--accent', acc);
     r.style.setProperty('--on-accent', lumHex(acc) > 0.42 ? '#04130d' : '#ffffff');       // visto/texto por cima da cor de destaque
     r.style.setProperty('--accent-2', pal.a2);
     // --grad: só a cor (gradiente simples, ou a cor sólida) e é o que a app toda usa. --grad-style: o estilo escolhido (píxeis, pontos…), só na capa do perfil
-    // e, se o interruptor estiver ligado, no calendário (--grad-cal).
+    // O calendário usa sempre a cor (--grad-cal, hoje igual a --grad); os seus próprios estilos virão depois.
     r.style.setProperty('--grad', t.style === 'solid' ? pal.s : `linear-gradient(135deg, ${pal.g[0]} 0%, ${pal.g[1]} 100%)`);
     r.style.setProperty('--c1', pal.g[0]); r.style.setProperty('--c2', pal.g[1]);          // as duas cores do gradiente (cartões de total: sempre gradiente)
     r.classList.toggle('anim', !!t.anim);
     r.style.setProperty('--grad-style', themeBg(t.style, pal));
-    r.style.setProperty('--grad-cal', t.calStyle ? 'var(--grad-style)' : 'var(--grad)');
+    r.style.setProperty('--grad-card', themeBg(t.style, pal, false, true));        // a mesma imagem, com a variante pensada para o cartão (efeito afastado do texto)
     const baseL = t.style === 'solid' ? lumHex(pal.s) : lumHex(mixHex(pal.g[0], pal.g[1]));
     r.style.setProperty('--on-grad-g', lumHex(mixHex(pal.g[0], pal.g[1])) > 0.42 ? '#04130d' : '#ffffff');   // texto nos cartões de total (sempre gradiente)
     r.style.setProperty('--on-grad', baseL > 0.42 ? '#04130d' : '#ffffff');       // texto por cima do destaque: escuro em fundos claros, branco nos escuros
@@ -275,12 +433,15 @@ function applyTheme(t, opts = {}) {
     for (const [k, v] of Object.entries(fluidVars(pal))) r.style.setProperty(k, v);
     // Cartões de total: por defeito só a cor (gradiente). Com "Cartões seguem o estilo" ligado usam o estilo escolhido:
     // os de magma/ondas ganham o fundo escuro com o movimento, e os outros o padrão (píxeis, pontos…) em imagem.
-    const fl = FLUID_CODE[t.style], cs = !!t.cardStyle;
+    const fl = FOOT_KINDS.includes(t.style) ? undefined : FLUID_CODE[t.style], cs = !!t.cardStyle;     // fl: só os estilos que escurecem o cartão
     // Regra dos cartões: por defeito, gradiente (parado, ou a rodar se as animações estiverem ligadas). Seguindo o estilo: animado se as animações
     // estiverem ligadas; senão, a imagem parada do estilo (um pouco escurecida nos de magma/ondas para o texto branco se ler em qualquer paleta).
-    r.style.setProperty('--bt-bg', !cs ? 'linear-gradient(135deg, var(--c1), var(--c2))'
-      : fl ? (fluidMotion(t) ? `var(--${fl}-card)` : 'linear-gradient(rgba(0, 0, 0, .3), rgba(0, 0, 0, .3)), var(--grad-style)')
-      : 'var(--grad-style)');
+    // Cartões de total (gradiente por defeito): um ponto claro numa ponta e um tom mais fundo na outra, para o relevo se notar tanto no tema claro como no escuro.
+    const hi = mixHex(mixHex(pal.g[0], pal.g[1], .18), '#ffffff', .1), lo = mixHex(mixHex(pal.g[0], pal.g[1], .82), '#000000', .12);
+    r.style.setProperty('--bt-grad', `linear-gradient(135deg, ${hi} 0%, ${pal.g[0]} 34%, ${pal.g[1]} 68%, ${lo} 100%)`);
+    r.style.setProperty('--bt-bg', !cs || FOOT_KINDS.includes(t.style) ? 'var(--bt-grad)'
+      : fl ? (fluidMotion(t) ? `var(--${fl}-card)` : 'linear-gradient(100deg, rgba(0, 0, 0, .34) 0%, rgba(0, 0, 0, .12) 50%, rgba(0, 0, 0, 0) 85%), radial-gradient(ellipse at 80% -10%, rgba(255, 255, 255, .18), rgba(255, 255, 255, 0) 58%), var(--grad-card)')
+      : classicCardMotion(t) ? 'linear-gradient(135deg, var(--c1) 0%, var(--c2) 100%)' : t.style === 'pixel' ? 'linear-gradient(100deg, color-mix(in srgb, var(--c1) 50%, var(--c2)) 0%, color-mix(in srgb, var(--c1) 50%, var(--c2)) 36%, transparent 80%), var(--grad-style)' : t.style === 'conic' ? 'var(--grad-card)' : 'var(--grad-style)');       // Píxeis, Aurora, Quadrículas, Cónico: base lisa + camada que se mexe
     if (cs && fl) r.style.setProperty('--on-grad-g', '#ffffff');                       // fundo escuro: texto claro
     else if (cs && t.style === 'solid') r.style.setProperty('--on-grad-g', baseL > 0.42 ? '#04130d' : '#ffffff');
     if (cs) r.dataset.cardstyle = '1'; else delete r.dataset.cardstyle;
@@ -288,8 +449,9 @@ function applyTheme(t, opts = {}) {
     refreshCover(t);
     decorateTotals();
     r.dataset.cal = CAL_STYLES.some(c => c[0] === t.cal) ? t.cal : 'soft';
+    if (t.day && t.day !== 'default' && DAY_STYLES.some(d => d[0] === t.day) && r.dataset.cal !== 'min') r.dataset.day = t.day; else delete r.dataset.day;     // o Minimalista não leva estes marcadores
     try { localStorage.setItem('konto.theme', JSON.stringify(t)); } catch {}                // para o arranque já nascer com o último tema
-    document.querySelector('meta[name=theme-color]')?.setAttribute('content', getComputedStyle(r).getPropertyValue('--bg').trim() || '#0f1115');
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', getComputedStyle(r).getPropertyValue('--bg').trim() || '#0b0b0c');
   };
   // Claro ↔ escuro: a troca é imediata, mas fica tapada por uma película da cor antiga que desvanece (uma só animação de opacidade, quase de graça
   // para o telemóvel). Experimentei esbater as cores de todos os elementos e depois um círculo a abrir: ambos obrigam a redesenhar a página a cada
@@ -297,7 +459,7 @@ function applyTheme(t, opts = {}) {
   if (opts.animate && flips && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     document.querySelectorAll('.theme-fade').forEach(o => o.remove());
     const ov = document.createElement('div'); ov.className = 'theme-fade';
-    ov.style.background = getComputedStyle(r).getPropertyValue('--bg').trim() || '#0f1115';           // a cor de fundo ANTIGA
+    ov.style.background = getComputedStyle(r).getPropertyValue('--bg').trim() || '#0b0b0c';           // a cor de fundo ANTIGA
     document.body.appendChild(ov);
     r.classList.add('no-tr');                                                                         // sem as pequenas transições de cor de cada elemento durante a troca
     run(); void ov.offsetWidth;                                                                       // o ecrã novo fica por baixo, já com o tema novo
@@ -308,7 +470,6 @@ function applyTheme(t, opts = {}) {
   }
   run();
 }
-matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', () => { if (appliedTheme.mode === 'auto') applyTheme(appliedTheme); });
 
 /* Módulos que o utilizador pode escolher gerir. */
 const MODULES = [
@@ -748,7 +909,7 @@ function render() {
   const views = { welcome: vWelcome, ask: vAsk, picker: vPicker, form: vForm, profile: vProfile };
   const y = window.scrollY, view = ui.screen + ':' + ui.tab;
   const same = render.last === view;                         // mesmo ecrã e separador: mantém onde estavas
-  if (!same) ui.page = {};                                   // ao sair das Definições (ou de qualquer ecrã), as cores e os estilos voltam à primeira página
+  if (!same) ui.page = {};                                   // ao sair das Definições (ou de qualquer ecrã), esquece a página: ao voltar, abre na página da cor e do estilo escolhidos
   let html, failed = false;
   try { html = views[ui.screen](); }
   catch (e) {                                                 // nunca deixar a app sem botões: mostra uma saída
@@ -980,7 +1141,7 @@ function countUp(el, from) {                       // o total "corre" do valor a
   };
   requestAnimationFrame(step);
 }
-function setPeriod(k) {
+function setPeriod(k, slide) {                    // slide = true só quando vem de um deslize; ao tocar nos botões o cartão fica no sítio
   const p = current(), old = PERIODS.findIndex(x => x[0] === ui.period), nu = PERIODS.findIndex(x => x[0] === k);
   if (!p || nu < 0 || old === nu) return;
   const prev = Number(document.querySelector('#summary .sum-total')?.dataset.v) || 0;
@@ -989,7 +1150,7 @@ function setPeriod(k) {
   const newSeg = document.querySelector('#summary .seg');
   if (newSeg && ox) { newSeg.style.setProperty('--sx', ox); newSeg.style.setProperty('--sw', ow); newSeg.classList.add('ready'); void newSeg.offsetWidth; }   // parte da posição antiga: o destaque desliza até à nova
   const card = document.querySelector('#summary .summary');
-  card.classList.add(nu > old ? 'from-r' : 'from-l');
+  if (slide) card.classList.add(nu > old ? 'from-r' : 'from-l');
   countUp(card.querySelector('.sum-total'), prev);
 }
 /* O mesmo para a visão geral dos Vícios (#vsummary): muda de período com deslize, total a "correr", barra a crescer e linhas a entrar. */
@@ -1005,29 +1166,74 @@ function refreshVSummary(p, dir) {                  // dir: +1 / -1 = mudou de p
   syncAnims();                                                       // o cartão novo continua o movimento de onde ia (não salta para o início)
   countUp(box.querySelector('.big-total b'), prev);
 }
-function setVPeriod(k) {
+function setVPeriod(k, slide) {
   const p = current(), old = PERIODS.findIndex(x => x[0] === ui.vperiod), nu = PERIODS.findIndex(x => x[0] === k);
   if (!p || nu < 0 || old === nu) return;
-  ui.vperiod = k; refreshVSummary(p, nu > old ? 1 : -1);
+  ui.vperiod = k; refreshVSummary(p, slide ? (nu > old ? 1 : -1) : 0);
 }
 function swipePeriod(dir, v) {                      // dir: +1 = próximo (deslizar para a esquerda), -1 = anterior; v: visão geral dos Vícios
   const cur = v ? ui.vperiod : ui.period, i = PERIODS.findIndex(x => x[0] === cur) + dir;
-  if (i >= 0 && i < PERIODS.length) return v ? setVPeriod(PERIODS[i][0]) : setPeriod(PERIODS[i][0]);
+  if (i >= 0 && i < PERIODS.length) return v ? setVPeriod(PERIODS[i][0], true) : setPeriod(PERIODS[i][0], true);
   const card = document.querySelector(v ? '#vsummary' : '#summary .summary');     // já está no fim: um pequeno "abanão"
   if (card) { card.classList.remove('edge-l', 'edge-r', 'slide-r', 'slide-l'); void card.offsetWidth; card.classList.add(dir > 0 ? 'edge-l' : 'edge-r'); }
 }
+// Deslizar entre períodos em tempo real: o cartão acompanha o dedo (com resistência no fim da lista) e, ao largar, ou muda de período ou volta ao sítio.
 let swipe0 = null, swipedAt = 0;
+const swipeCardOf = v => document.querySelector(v ? '#vsummary' : '#summary .summary');
+const swipeValid = (dir, v) => { const i = PERIODS.findIndex(x => x[0] === (v ? ui.vperiod : ui.period)) + dir; return i >= 0 && i < PERIODS.length; };
+const swipeBack = c => {
+  if (!c) return;
+  c.style.transition = 'transform .38s cubic-bezier(.2, .8, .2, 1), opacity .38s ease'; c.style.transform = ''; c.style.opacity = '';
+  setTimeout(() => { if (c.isConnected) c.style.transition = ''; }, 420);
+};
 document.addEventListener('touchstart', e => {
   const t = e.touches.length === 1 && e.target.closest?.('#summary .summary, #vsummary .big-total');
-  swipe0 = t ? { x: e.touches[0].clientX, y: e.touches[0].clientY, v: !!t.closest('#vsummary') } : null;
+  if (!t || e.target.closest('button, a, input, select, .seg')) { swipe0 = null; return; }       // quem toca nos botões (Hoje, Semana…) não agarra o cartão
+  const v = !!t.closest('#vsummary');
+  swipe0 = { x: e.touches[0].clientX, y: e.touches[0].clientY, v, c: swipeCardOf(v), lock: null };
+}, { passive: true });
+document.addEventListener('touchmove', e => {
+  if (!swipe0) return;
+  const t = e.touches[0], dx = t.clientX - swipe0.x, dy = t.clientY - swipe0.y;
+  if (!swipe0.lock) {                                                              // decide cedo: gesto horizontal (arrastar o cartão) ou vertical (scroll da página)
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.3) swipe0.lock = 'h'; else if (Math.abs(dy) > 10) swipe0.lock = 'v';
+  }
+  if (swipe0.lock !== 'h' || !swipe0.c) return;
+  const off = Math.max(-140, Math.min(140, dx * (swipeValid(dx < 0 ? 1 : -1, swipe0.v) ? .8 : .25)));
+  swipe0.c.style.transition = 'none'; swipe0.c.style.transform = `translateX(${off}px)`; swipe0.c.style.opacity = String(1 - Math.min(.35, Math.abs(off) / 300));
 }, { passive: true });
 document.addEventListener('touchend', e => {
   if (!swipe0) return;
-  const t = e.changedTouches[0], dx = t.clientX - swipe0.x, dy = t.clientY - swipe0.y, v = swipe0.v; swipe0 = null;
-  if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) return;             // só gestos claramente horizontais
-  swipedAt = Date.now(); swipePeriod(dx < 0 ? 1 : -1, v);
+  const s = swipe0, t = e.changedTouches[0], dx = t.clientX - s.x, dy = t.clientY - s.y; swipe0 = null;
+  if (s.lock !== 'h') return;
+  swipedAt = Date.now();
+  const dir = dx < 0 ? 1 : -1;
+  if (Math.abs(dx) >= 48 && Math.abs(dx) >= Math.abs(dy) * 1.5 && swipeValid(dir, s.v)) {
+    if (s.c) { s.c.style.transition = ''; s.c.style.transform = ''; s.c.style.opacity = ''; }
+    swipePeriod(dir, s.v);
+  } else swipeBack(s.c);                                                           // curto demais, ou já no fim: volta ao sítio
 }, { passive: true });
+document.addEventListener('touchcancel', () => { if (swipe0?.lock === 'h') swipeBack(swipe0.c); swipe0 = null; }, { passive: true });
 
+const calNoMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+function calOpen(el) {                              // abre devagar: altura, margens e opacidade crescem a partir de zero
+  if (!el || calNoMotion()) return;
+  const cs = getComputedStyle(el), to = { height: el.offsetHeight + 'px', paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, marginTop: cs.marginTop, marginBottom: cs.marginBottom, opacity: 1 };
+  el.style.overflow = 'hidden';
+  el.animate([{ height: '0px', paddingTop: '0px', paddingBottom: '0px', marginTop: '0px', marginBottom: '0px', opacity: 0 }, to], { duration: 300, easing: 'cubic-bezier(.2, .8, .2, 1)' }).onfinish = () => { el.style.overflow = ''; };
+}
+function calClose(el, done) {                       // fecha devagar e só depois tira o conteúdo
+  if (!el || calNoMotion()) return done();
+  const cs = getComputedStyle(el); el.style.overflow = 'hidden';
+  const an = el.animate([{ height: el.offsetHeight + 'px', paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, marginTop: cs.marginTop, marginBottom: cs.marginBottom, opacity: 1 },
+    { height: '0px', paddingTop: '0px', paddingBottom: '0px', marginTop: '0px', marginBottom: '0px', opacity: 0 }], { duration: 240, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'forwards' });
+  an.onfinish = done;
+}
+function refreshCalSummary(p) {                    // abrir/fechar as listas do histórico só mexe na zona do histórico (o resto do calendário não se refaz nem repete as animações)
+  const tmp = document.createElement('div'); tmp.innerHTML = vCalendar(p);
+  const novo = tmp.querySelector('#cal-sum'), velho = document.getElementById('cal-sum');
+  if (novo && velho) velho.innerHTML = novo.innerHTML; else $('#calendar').innerHTML = tmp.innerHTML;
+}
 function vCalendar(p) {
   const { y, m } = ui.cal;
   const calAnim = ui.calAnim || '', calPop = ui.calPop; ui.calAnim = ''; ui.calPop = null;   // animações de uma só vez: mudar de mês / escolher um dia
@@ -1061,15 +1267,15 @@ function vCalendar(p) {
     const hline = e => `<div class="hline"><i style="background:${catOf(e.cat).color}"></i><span class="d">${e.day}</span><span class="n">${esc(e.name)}</span><b class="${e.gain > 0 ? 'pos' : ''}">${amtText(e)}</b></div>`;
     const openM = ui.cal.open === 'month', openY = ui.cal.open === 'year';
     summary = `<button class="total hist-toggle" data-act="toggle-hist" data-v="month" aria-expanded="${openM}">
-        <span>Gasto em ${MESES[m]} até dia ${upTo} ${ico('down', openM ? 'flip' : '')}</span><span class="neg">${cost(inMonth)}</span></button>
+        <span>Gastos em ${MESES[m]} até dia ${upTo} ${ico('down', openM ? 'flip' : '')}</span><span class="neg">${cost(inMonth)}</span></button>
       ${openM ? `<div class="hist">${monthList.map(hline).join('') || '<p class="muted small">Sem gastos.</p>'}</div>` : ''}
       <button class="total hist-toggle" data-act="toggle-hist" data-v="year" aria-expanded="${openY}">
-        <span>Gasto acumulado em ${y} ${ico('down', openY ? 'flip' : '')}</span><span class="neg">${cost(inYear)}</span></button>
+        <span>Gastos em ${y} ${ico('down', openY ? 'flip' : '')}</span><span class="neg">${cost(inYear)}</span></button>
       ${openY ? `<div class="hist">${yearGroups.map(g => {
         const mOpen = ui.cal.openM[g.mm] ?? (g.mm === m);   // o mês atual abre por defeito
-        return `<button class="hmonth" data-act="toggle-hm" data-mm="${g.mm}"><span>${ico('down', mOpen ? 'flip' : '')} ${MESES[g.mm]} <small>· ${g.list.length}</small></span><span>${cost(monthSpend(g))}</span></button>${mOpen ? g.list.map(hline).join('') : ''}`;
+        return `<button class="hmonth" data-act="toggle-hm" data-mm="${g.mm}"><span>${ico('down', mOpen ? 'flip' : '')} ${MESES[g.mm]} <small>· ${g.list.length}</small></span><span>${cost(monthSpend(g))}</span></button>${mOpen ? '<div class="hm-body">' + g.list.map(hline).join('') + '</div>' : ''}`;
       }).join('') || '<p class="muted small">Sem gastos.</p>'}</div>` : ''}
-      <p class="hint" style="margin-top:10px">Só conta desde o mês em que começaste a registar. Toca numa linha para ver o detalhe.</p>`;
+      <p class="hint" style="margin-top:10px">Só conta desde o mês em que começaste a registar.</p>`;
   }
   const title = ui.cal.sel ? `${ui.cal.sel} de ${MESES[m]}` : `Gastos de ${MESES[m]}`;
   const lim = ui.cal.limit || 20;                           // listas longas: mostra 20 de cada vez
@@ -1087,7 +1293,7 @@ function vCalendar(p) {
     <div class="card">
       <div class="card-h"><h3>${title}</h3>${ui.cal.sel && shown.length < 2 ? '' : `<span class="neg" style="font-weight:700">${cost(headTotal)}</span>`}</div>
       ${list}
-      ${summary}
+      <div id="cal-sum">${summary}</div>
     </div>`;
 }
 
@@ -1152,8 +1358,8 @@ function vSubs(p) {
     <h1 class="page-title">Subscrições</h1>
     <div class="big-total" style="margin-top:16px">
       <span>Todos os meses</span><b>${cost(monthlyTotal)}</b>
-      ${others.length ? `<span>Anuais e outras: ${cost(othersYear)} por ano</span>` : ''}
-      <span>≈ ${cost(monthlyTotal * 12 + othersYear)} por ano no total</span>
+      ${others.length ? `<span class="bt-sub">Anuais e outras: ${cost(othersYear)}/ano</span>` : ''}
+      <span class="bt-sub">Total ≈ ${cost(monthlyTotal * 12 + othersYear)}/ano</span>
     </div>
     ${p.subs.length ? '' : `<div class="card"><div class="empty-state"><div class="emoji">${ico('subs')}</div>Ainda não tens subscrições.<br>Toca em <b>+</b> para adicionar a primeira.</div></div>`}
     ${monthly.length ? `<div class="card"><div class="card-h"><h3>Todos os meses</h3><span class="muted small">${monthly.length}</span></div>
@@ -1621,8 +1827,8 @@ function vHouse(p) {
     <h1 class="page-title">Casa</h1>
     <div class="big-total" style="margin-top:16px">
       <span>Todos os meses</span><b>${cost(monthlyTotal)}</b>
-      ${otherInfos.length ? `<span>Outras frequências: ${cost(othersYear)} por ano</span>` : ''}
-      <span>≈ ${cost(monthlyTotal * 12 + othersYear)} por ano no total</span>
+      ${otherInfos.length ? `<span class="bt-sub">Outras frequências: ${cost(othersYear)}/ano</span>` : ''}
+      <span class="bt-sub">Total ≈ ${cost(monthlyTotal * 12 + othersYear)}/ano</span>
     </div>
     ${pendCard}
     ${p.bills.length ? '' : `<div class="card"><div class="empty-state"><div class="emoji">${ico('home')}</div>Ainda não tens contas de casa.<br>Toca em <b>+</b> para juntar a renda, a luz, a água…</div></div>`}
@@ -1668,9 +1874,9 @@ function vSpend(p) {
 /* Cor, estilo, calendário e modo: usado nas Definições e na janela rápida do Início. */
 /* Cores e estilos podem ser muitos: mostram-se em PÁGINAS (uma grelha completa de cada vez), com setas, pontinhos e deslizar para o lado.
    Nada fica cortado nem precisa de scroll interno, e funciona para 15 ou para 150. Começa sempre na primeira página. */
-const PAL_PER_PAGE = 10, STYLE_PER_PAGE = 6;
-function swatchPager(kind, items, perPage, tile, gridClass) {
-  const pages = Math.max(1, Math.ceil(items.length / perPage)), cur = Math.min(ui.page?.[kind] || 0, pages - 1);
+const PAL_PER_PAGE = 12, STYLE_PER_PAGE = 6;
+function swatchPager(kind, items, perPage, tile, gridClass, selIdx = 0) {      // selIdx: o item escolhido; sem página guardada, abre logo na página dele
+  const pages = Math.max(1, Math.ceil(items.length / perPage)), cur = Math.min(ui.page?.[kind] ?? Math.floor(selIdx / perPage), pages - 1); (ui.page ||= {})[kind] = cur;
   const grids = Array.from({ length: pages }, (_, i) => `<div class="theme-grid ${gridClass}" role="group" aria-label="Página ${i + 1} de ${pages}">${items.slice(i * perPage, (i + 1) * perPage).map(tile).join('')}</div>`).join('');
   const dots = Array.from({ length: pages }, (_, i) => `<button class="pg-dot ${i === cur ? 'on' : ''}" data-act="pg" data-k="${kind}" data-to="${i}" aria-label="Página ${i + 1}"></button>`).join('');
   const bar = pages > 1 ? `<div class="pager-bar"><button class="pg-btn" data-act="pg" data-k="${kind}" data-d="-1" aria-label="Página anterior" ${cur === 0 ? 'disabled' : ''}>${ico('left')}</button>
@@ -1708,17 +1914,27 @@ function themeControls(p) {
       <i style="background:${themeBg(th.style, pal, true)}"></i><span>${pal.name}</span></button>`;
   const styleTile = ([k, l]) => `<button class="swatch wide ${on(th.style, k)}" data-act="theme-style" data-v="${k}" aria-label="${l}">
       <i style="background:${themeBg(k, palOf(th.palette), true)}"></i><span>${l}</span></button>`;
-  return `${swatchPager('pal', PALETTES, PAL_PER_PAGE, palTile, 'pal')}
-    <div class="field"><label>Estilo</label>${swatchPager('style', THEME_STYLES, STYLE_PER_PAGE, styleTile, 'three')}</div>
+  return `${swatchPager('pal', PALETTES, PAL_PER_PAGE, palTile, 'pal', PALETTES.findIndex(x => x.id === th.palette))}
+    <div class="field"><label>Estilo</label>${swatchPager('style', THEME_STYLES, STYLE_PER_PAGE, styleTile, 'three', THEME_STYLES.findIndex(x => x[0] === th.style))}</div>
     <div class="switch-row" data-act="theme-anim"><div><b>Animações ligadas</b><div class="hint">Põe as cores a dançar. Se te der tonturas, é só desligar.</div></div><div class="switch ${th.anim ? 'on' : ''}" id="anim-switch"></div></div>
+    <div class="fx ${th.anim ? 'anim-on' : ''} ${ALWAYS_ANIM.includes(th.style) ? 'fluid' : ''}" id="fx-panel">
+      <div class="fx-row fx-speed"><div class="fx-in"><div class="fx-head"><b>Velocidade</b><span class="fx-val">${fxSpeedLabel(fxSpeed(th))}</span></div>
+        <input type="range" class="fx-range" data-fx="speed" min="0.5" max="2" step="0.25" value="${fxSpeed(th)}" aria-label="Velocidade das animações"></div></div>
+      <div class="fx-row fx-amount"><div class="fx-in"><div class="fx-head"><b>Quantidade de efeitos</b><span class="fx-val">${FX_AMOUNT[fxLevel(th) - 1]}</span></div>
+        <input type="range" class="fx-range" data-fx="amount" min="1" max="5" step="1" value="${fxLevel(th)}" aria-label="Quantidade de efeitos"></div></div>
+    </div>
     <div class="field"><label>Calendário</label><div class="chips" style="--c:var(--accent)">${CAL_STYLES.map(([k, l]) => `<button class="chip ${on(th.cal, k)}" data-act="theme-cal" data-v="${k}">${l}</button>`).join('')}</div></div>
-    <div class="switch-row" data-act="theme-calstyle"><div><b>Calendário segue o estilo</b></div><div class="switch ${th.calStyle ? 'on' : ''}" id="calstyle-switch"></div></div>
+    <div class="field day-row"><label>Dia selecionado</label><div class="chips" style="--c:var(--accent)">${DAY_STYLES.map(([k, l]) => `<button class="chip ${on(DAY_STYLES.some(d => d[0] === th.day) ? th.day : 'default', k)}" data-act="theme-day" data-v="${k}">${l}</button>`).join('')}</div></div>
     <div class="switch-row" data-act="theme-cardstyle"><div><b>Cartões seguem o estilo</b></div><div class="switch ${th.cardStyle ? 'on' : ''}" id="cardstyle-switch"></div></div>
-    <div class="field"><label>Modo</label><div class="seg three">${THEME_MODES.map(([k, l]) => `<button data-act="theme-mode" data-v="${k}" class="${on(th.mode, k)}">${l}</button>`).join('')}</div>
+    <div class="field"><label>Modo</label><div class="seg four modes">${THEME_MODES.map(([k, l]) => `<button data-act="theme-mode" data-v="${k}" class="${on(th.mode, k)}">${l}</button>`).join('')}</div>
       <span class="hint">O tema é só deste perfil. Cada pessoa no telemóvel pode ter o seu.</span></div>`;
 }
+function refreshPreviews(th) {
+  document.querySelectorAll('#pal-wrap .swatch[data-pal]').forEach(b => { b.querySelector('i').style.background = themeBg(th.style, palOf(b.dataset.pal), true); });
+  document.querySelectorAll('#style-wrap .swatch[data-v]').forEach(b => { b.querySelector('i').style.background = themeBg(b.dataset.v, palOf(th.palette), true); });
+}
 function appearanceSheet(p) {
-  ui.page = {};                                                      // cada vez que abre, as cores e os estilos começam na primeira página
+  ui.page = {};                                                      // cada vez que abre, as cores e os estilos abrem na página do que está escolhido
   openSheet(`<h2>Aparência</h2>${themeControls(p)}
     <div class="stack"><button class="btn primary" data-act="close-btn">Pronto</button></div>`);
 }
@@ -2326,8 +2542,8 @@ function enterProfile(id) {
 
 /* Ecrã de carregamento ao abrir um perfil (cerca de 2,3 s): cartão com a foto do perfil, anel a rodar, mensagens e barra de progresso.
    O perfil é aberto por baixo enquanto o cartão está à frente, e o cartão desvanece no fim. */
-// Seis animações diferentes: a cada abertura sai uma ao acaso (nunca a mesma duas vezes seguidas), com mensagens também variadas.
-const LOADERS = ['ring', 'pulse', 'float', 'orbit', 'coins', 'chart'];
+// Onze animações diferentes: a cada abertura sai uma ao acaso (nunca a mesma duas vezes seguidas), com mensagens também variadas.
+const LOADERS = ['ring', 'pulse', 'float', 'orbit', 'coins', 'chart', 'lock', 'sparkle', 'radar', 'heart', 'confetti'];
 const LD_MSGS = [
   ['A carregar o perfil…', 'A abrir o teu perfil…', 'A preparar o teu espaço…'],
   ['A preparar os teus dados…', 'A organizar as contas…', 'A pôr tudo em ordem…'],
@@ -2351,6 +2567,11 @@ function loaderParts(kind, prof) {                                    // [parte 
     case 'orbit': return [`<div class="ld-ring"><div class="ld-orbit"><i style="--a:0deg"></i><i style="--a:120deg"></i><i style="--a:240deg"></i></div>${av}</div>`, bar];
     case 'coins': return [`<div class="ld-ring">${av}</div>`, '<div class="ld-coins"><i>€</i><i>€</i><i>€</i></div>'];
     case 'chart': return [`<div class="ld-ring">${av}</div>`, '<svg class="ld-chart" viewBox="0 0 120 44" aria-hidden="true"><path d="M4 38 L26 28 L46 33 L68 14 L90 21 L116 5"/></svg>'];
+    case 'lock': return [`<div class="ld-ring">${av}</div>`, '<div class="ld-lock"><svg viewBox="0 0 40 46" aria-hidden="true"><path class="sh" d="M11 21 V15 a9 9 0 0 1 18 0 V21"/><rect class="bd" x="6" y="21" width="28" height="21" rx="5"/><circle class="kh" cx="20" cy="31" r="3"/></svg></div>'];
+    case 'sparkle': return [`<div class="ld-ring">${[0, 1, 2, 3, 4, 5].map(i => `<i class="ld-sp" style="--a:${i * 60}deg;--d:${(i * .28).toFixed(2)}s"></i>`).join('')}${av}</div>`, dots];
+    case 'radar': return [`<div class="ld-ring"><i class="ld-radar"></i><i class="ld-pulse"></i>${av}</div>`, bar];
+    case 'heart': return [`<div class="ld-ring ld-beat">${av}</div>`, '<svg class="ld-ecg" viewBox="0 0 120 40" aria-hidden="true"><path d="M2 22 H34 L42 22 L48 6 L56 36 L62 22 H118"/></svg>'];
+    case 'confetti': return [`<div class="ld-ring">${Array.from({ length: 10 }, (_, i) => `<i class="ld-cf" style="--a:${i * 36}deg;--d:${((i % 5) * .12).toFixed(2)}s;--c:${i % 3}"></i>`).join('')}${av}</div>`, dots];
     default: return [`<div class="ld-ring"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ld-track" cx="66" cy="66" r="62"/><circle class="ld-arc" cx="66" cy="66" r="62"/></svg>${av}</div>`, bar];
   }
 }
@@ -2431,11 +2652,62 @@ function syncAnims() {
       const t = a.effect?.getComputedTiming?.(); if (!t || t.iterations !== Infinity || !t.duration) continue;     // só as contínuas; as de entrada não
       const cycle = t.duration * (/alternate/.test(t.direction) ? 2 : 1);
       a.currentTime = performance.now() % cycle;
+      const sp = fxSpeed(appliedTheme); if (sp !== 1) a.playbackRate = sp;
     }
   });
 }
+function applySpeed() {                                           // chamado quando o cursor da velocidade mexe: ajusta já as animações que estão a correr
+  const sp = fxSpeed(appliedTheme);
+  document.querySelectorAll('.big-total, .cover.anim').forEach(el => {
+    for (const a of el.getAnimations({ subtree: true })) {
+      if (!a.animationName) continue;
+      const t = a.effect?.getComputedTiming?.(); if (!t || t.iterations !== Infinity) continue;
+      if (a.playbackRate !== sp) a.updatePlaybackRate(sp);
+    }
+  });
+}
+// Cursores "Velocidade" e "Quantidade de efeitos" da janela de aparência: aplicam-se enquanto se arrasta e guardam-se ao largar.
+let fxQueued = false;
+document.addEventListener('input', e => {
+  const r = e.target.closest?.('[data-fx]'); if (!r) return;
+  const p = current(); if (!p) return;
+  const key = r.dataset.fx, v = +r.value;
+  p.theme = { ...themeOf(p), [key]: v };
+  const lab = r.parentElement.querySelector('.fx-val'); if (lab) lab.textContent = key === 'speed' ? fxSpeedLabel(v) : FX_AMOUNT[v - 1];
+  if (fxQueued) return; fxQueued = true;
+  requestAnimationFrame(() => {
+    fxQueued = false;
+    const th = themeOf(current());
+    applyTheme(th); applySpeed();
+    refreshPreviews(th);                                         // as miniaturas também mostram a quantidade escolhida
+  });
+});
+document.addEventListener('change', e => { if (e.target.closest?.('[data-fx]')) saveDB(); });
 /* O observador só acorda para o que lhe interessa (seletores, barra de baixo, capa e cartões de total) e mede tudo de uma vez, no fotograma seguinte,
    para não forçar cálculos de layout a meio de uma animação. */
+/* Cartões de total em 3D: ao tocar e arrastar, o cartão inclina-se para onde está o dedo, em tempo real; ao largar, volta devagar à posição.
+   O CSS usa touch-action: pan-y, por isso o scroll vertical da página continua a funcionar (o browser cancela o gesto e o cartão volta ao sítio). */
+(() => {
+  let el = null, raf = 0, nx = 0, ny = 0;
+  const apply = () => {
+    raf = 0; if (!el) return;
+    el.style.setProperty('--ry', (nx * 14).toFixed(2) + 'deg'); el.style.setProperty('--rx', (-ny * 12).toFixed(2) + 'deg');
+    el.style.setProperty('--px', nx.toFixed(3)); el.style.setProperty('--py', ny.toFixed(3)); el.style.setProperty('--gl', '1');
+  };
+  const track = e => {
+    const r = el.getBoundingClientRect();
+    nx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - .5) * 2)); ny = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height - .5) * 2));
+    if (!raf) raf = requestAnimationFrame(apply);
+  };
+  const end = () => {
+    if (!el) return;
+    const c = el; el = null; cancelAnimationFrame(raf); raf = 0; c.classList.remove('tilting');
+    for (const k of ['--rx', '--ry', '--px', '--py', '--gl']) c.style.removeProperty(k);
+  };
+  document.addEventListener('pointerdown', e => { const c = e.target.closest?.('.big-total'); if (!c || e.target.closest('button, a, input, select, .seg')) return; el = c; c.classList.add('tilting'); track(e); }, { passive: true });
+  document.addEventListener('pointermove', e => { if (el) track(e); }, { passive: true });
+  document.addEventListener('pointerup', end, { passive: true }); document.addEventListener('pointercancel', end, { passive: true });
+})();
 const WATCH = '.seg, .nav, .big-total, .cover';
 let segQueued = false;
 const queueSync = () => {
@@ -2518,10 +2790,11 @@ document.addEventListener('click', async e => {
     }
     case 'theme-anim':
       p.theme = { ...themeOf(p), anim: !themeOf(p).anim }; applyTheme(p.theme); saveDB();
-      $('#anim-switch').classList.toggle('on', !!p.theme.anim); break;
-    case 'theme-calstyle':
-      p.theme = { ...themeOf(p), calStyle: !themeOf(p).calStyle }; applyTheme(p.theme); saveDB();
-      $('#calstyle-switch').classList.toggle('on', !!p.theme.calStyle); break;
+      $('#anim-switch').classList.toggle('on', !!p.theme.anim);
+      $('#fx-panel')?.classList.toggle('anim-on', !!p.theme.anim); break;
+    case 'theme-day':
+      p.theme = { ...themeOf(p), day: el.dataset.v }; applyTheme(p.theme); saveDB();
+      document.querySelectorAll('[data-act=theme-day]').forEach(b => b.classList.toggle('on', b === el)); break;
     case 'theme-cardstyle':
       p.theme = { ...themeOf(p), cardStyle: !themeOf(p).cardStyle }; applyTheme(p.theme); saveDB();
       $('#cardstyle-switch').classList.toggle('on', !!p.theme.cardStyle); break;
@@ -2535,9 +2808,8 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
       const key = act === 'theme-pal' ? 'palette' : act === 'theme-style' ? 'style' : act === 'theme-cal' ? 'cal' : 'mode';
       p.theme = { ...themeOf(p), [key]: el.dataset.v }; applyTheme(p.theme, { animate: act === 'theme-mode', from: el }); saveDB();
       document.querySelectorAll(`[data-act=${act}]`).forEach(b => b.classList.toggle('on', b === el));
-      const th = themeOf(p);                                                     // as pré-visualizações seguem a cor e o estilo escolhidos
-      document.querySelectorAll('#pal-wrap .swatch[data-pal]').forEach(b => { b.querySelector('i').style.background = themeBg(th.style, palOf(b.dataset.pal), true); });
-      document.querySelectorAll('#style-wrap .swatch[data-v]').forEach(b => { b.querySelector('i').style.background = themeBg(b.dataset.v, palOf(th.palette), true); });
+      refreshPreviews(themeOf(p));                                               // as pré-visualizações seguem a cor e o estilo escolhidos
+      $('#fx-panel')?.classList.toggle('fluid', ALWAYS_ANIM.includes(p.theme.style));
       break;
     }
     case 'vice-icon': {
@@ -2645,15 +2917,27 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
     }
     case 'more-cal': ui.cal.limit += 20; $('#calendar').innerHTML = vCalendar(p); break;
     case 'toggle-hm': {
-      const mm = +el.dataset.mm; ui.cal.openM[mm] = !(ui.cal.openM[mm] ?? (mm === ui.cal.m));
-      $('#calendar').innerHTML = vCalendar(p); break;
+      const mm = +el.dataset.mm, abrir = !(ui.cal.openM[mm] ?? (mm === ui.cal.m)), body = el.nextElementSibling?.classList.contains('hm-body') ? el.nextElementSibling : null;
+      el.querySelector('.i')?.classList.toggle('flip');                                  // a seta roda logo
+      const aplicar = () => { ui.cal.openM[mm] = abrir; refreshCalSummary(p); if (abrir) calOpen(document.querySelector(`#cal-sum .hmonth[data-mm="${mm}"] + .hm-body`)); };
+      if (!abrir && body) calClose(body, aplicar); else aplicar();
+      break;
     }
     case 'more-spend': ui.spendDays += 10; render(); break;
 
     /* Subscrições */
     case 'export-backup': exportBackup(p); break;
     case 'import-backup': $('#import-input').click(); break;
-    case 'toggle-hist': ui.cal.open = ui.cal.open === el.dataset.v ? null : el.dataset.v; $('#calendar').innerHTML = vCalendar(p); break;
+    case 'toggle-hist': {
+      const v = el.dataset.v, fechar = ui.cal.open === v, corpo = b => (b?.classList.contains('hist') ? b : null);
+      el.querySelector('.i')?.classList.toggle('flip');
+      const outro = !fechar && ui.cal.open ? document.querySelector(`#cal-sum [data-act=toggle-hist][data-v="${ui.cal.open}"]`) : null;
+      const aplicar = () => { ui.cal.open = fechar ? null : v; refreshCalSummary(p); if (!fechar) calOpen(document.querySelector(`#cal-sum [data-act=toggle-hist][data-v="${v}"] + .hist`)); };
+      if (fechar) calClose(corpo(el.nextElementSibling), aplicar);
+      else if (outro) { outro.querySelector('.i')?.classList.remove('flip'); calClose(corpo(outro.nextElementSibling), aplicar); }      // fecha primeiro a outra lista aberta
+      else aplicar();
+      break;
+    }
     /* Casa */
     case 'add-bill': billSheet(); break;
     case 'edit-bill': billSheet(p.bills.find(x => x.id === el.dataset.id)); break;
