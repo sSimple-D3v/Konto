@@ -245,7 +245,7 @@ h1, h2, h3, p { margin: 0; }
 .item .grow span { font-size: 13px; color: var(--muted); }
 .item .amt { font-weight: 700; }
 .total { display: flex; justify-content: space-between; padding-top: 16px; margin-top: 8px; border-top: 2px solid var(--line); font-weight: 800; font-size: 17px; }
-.big-total { background: var(--bt-bg, linear-gradient(135deg, var(--c1), var(--c2))); color: var(--on-grad-g, var(--on-grad)); border-radius: 24px; padding: 24px; margin-bottom: 16px; }
+.big-total { background: var(--bt-bg, linear-gradient(135deg, var(--c1), var(--c2))); color: var(--on-grad-g, var(--on-grad)); border-radius: 24px; padding: 24px 24px 68px;  /* espaço em baixo para os estilos animados (algas, barras…) não taparem os números */ margin-bottom: 16px; }
 .big-total span { font-size: 14px; font-weight: 600; opacity: .75; }
 .big-total b { display: block; font-size: 38px; letter-spacing: -.02em; margin: 4px 0; }
 .empty-state { text-align: center; padding: 32px 12px; color: var(--muted); }
@@ -347,7 +347,8 @@ h1, h2, h3, p { margin: 0; }
 @keyframes fadeo { from { opacity: 0; } }
 .sheet { width: 100%; max-width: 480px; max-height: calc(92dvh - var(--sat)); overflow-y: auto; background: var(--bg); border-radius: 28px 28px 0 0; padding: 12px 20px calc(24px + var(--sab)); animation: up .28s cubic-bezier(.2,.8,.2,1); }
 @keyframes up { from { transform: translateY(100%); } }
-.grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 16px; }
+.grab { position: relative; height: 28px; margin: -12px 0 4px; display: flex; justify-content: center; align-items: center; touch-action: none; cursor: grab; }
+.grab::before { content: ""; width: 40px; height: 4px; border-radius: 2px; background: var(--line); }      /* a zona de toque é maior do que a barrinha */
 .sheet h2 { margin-bottom: 18px; }
 .pin-dots { display: flex; gap: 14px; justify-content: center; margin: 8px 0 22px; }
 .pin-dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); }
@@ -838,12 +839,6 @@ html[data-cardstyle] .big-total { position: relative; overflow: hidden; isolatio
 .cover .cv.cv-neon, .cover .cv.cv-clouds, .cover .cv.cv-rain, .cover .cv.cv-marble, .cover .cv.cv-paper { inset: 0; will-change: auto; overflow: hidden; }
 /* Estrelas */
 /* Néon */
-.cv-neon .rg { position: absolute; left: 50%; top: 55%; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; border: 2px solid var(--ne-a); box-shadow: 0 0 10px var(--ne-ga), inset 0 0 10px var(--ne-ga); animation: neRing 3.6s ease-out infinite; will-change: transform, opacity; }
-.cv-neon .rg.b { border-color: var(--ne-b); box-shadow: 0 0 10px var(--ne-gb), inset 0 0 10px var(--ne-gb); }
-.cv-neon .ln { position: absolute; left: 6%; right: 6%; height: 2px; background: var(--ne-a); box-shadow: 0 0 8px var(--ne-ga); animation: neLine 2.6s ease-in-out infinite alternate; }
-.cv-neon .ln.b { background: var(--ne-b); box-shadow: 0 0 8px var(--ne-gb); }
-@keyframes neRing { 0% { transform: scale(.25); opacity: .95; } 100% { transform: scale(2.6); opacity: 0; } }
-@keyframes neLine { from { opacity: .35; } to { opacity: 1; } }
 /* Nuvens */
 .cv-clouds .cd { position: absolute; left: -170px; border-radius: 999px; background: rgba(255, 255, 255, .22); animation: clDrift 18s linear infinite; will-change: transform; }
 .cv-clouds .cd::before, .cv-clouds .cd::after { content: ""; position: absolute; border-radius: 50%; background: inherit; }
@@ -864,7 +859,7 @@ html[data-cardstyle] .big-total { position: relative; overflow: hidden; isolatio
 .cv-paper .sh { position: absolute; top: -30%; width: 14%; height: 160%; transform: rotate(18deg); background: rgba(255, 255, 255, .15); animation: ppSweep 8s ease-in-out infinite alternate; will-change: transform; }
 @keyframes ppSweep { from { transform: translateX(-60px) rotate(18deg); } to { transform: translateX(440px) rotate(18deg); } }
 /* Luzes */
-@media (prefers-reduced-motion: reduce) { .cv-neon .rg, .cv-neon .ln, .cv-clouds .cd, .cv-rain .dr, .cv-marble g, .cv-paper .sh { animation-play-state: paused !important; animation-delay: -2s !important; } }
+@media (prefers-reduced-motion: reduce) { .cv-clouds .cd, .cv-rain .dr, .cv-marble g, .cv-paper .sh { animation-play-state: paused !important; animation-delay: -2s !important; } }
 
 
 /* Corações: chuva, padrão a cintilar e balão (só transform e opacidade; o coração é uma máscara, por isso leva a cor da paleta) */
@@ -915,8 +910,8 @@ html[data-cardstyle] .big-total { position: relative; overflow: hidden; isolatio
 .big-total { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
   transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transform-origin: 50% 50%;
   transition: transform .55s cubic-bezier(.2, .8, .2, 1), box-shadow .55s cubic-bezier(.2, .8, .2, 1); will-change: transform;
-  box-shadow: calc(var(--px, 0) * -10px) calc(18px + var(--py, 0) * -6px) 30px -12px rgba(0, 0, 0, .6), 0 3px 6px -2px rgba(0, 0, 0, .35),
-    inset 0 1.5px 0 rgba(255, 255, 255, .28), inset 0 -14px 22px -10px rgba(0, 0, 0, .38), inset 0 0 0 .5px rgba(255, 255, 255, .08); }
+  box-shadow: calc(var(--px, 0) * -10px) calc(18px + var(--py, 0) * -6px) 30px -12px rgba(0, 0, 0, .6), 0 3px 6px -2px rgba(0, 0, 0, .3),
+    inset 0 0 0 .5px color-mix(in srgb, var(--c1) 42%, transparent), inset 0 10px 16px -10px rgba(255, 255, 255, .18), inset 0 -16px 22px -10px rgba(0, 0, 0, .4); }   /* contorno na cor do tema; relevo a preto e branco, suave */
 .big-total.tilting { transition: transform .07s linear, box-shadow .07s linear; }
 .big-total > :not(.cv-card):not(.cv-drift) { translate: calc(var(--px, 0) * -5px) calc(var(--py, 0) * -4px); transition: translate .55s cubic-bezier(.2, .8, .2, 1); }
 .big-total.tilting > :not(.cv-card):not(.cv-drift) { transition: translate .07s linear; }
@@ -1010,3 +1005,85 @@ html.anim .big-total { position: relative; overflow: hidden; isolation: isolate;
 /* Linhas pequenas do cartão de total (Subscrições e Casa): uma por linha, curtas */
 .big-total .bt-sub { display: block; font-size: 13px; line-height: 1.45; }
 .big-total b + .bt-sub { margin-top: 2px; }
+
+/* os cursores só reagem ao botão redondo (ver o código dos cursores); o resto da zona deixa passar o scroll */
+.fx-range { pointer-events: none; }
+.fx-in { touch-action: pan-y; }
+
+/* Carro (Combustível | Oficina), lembretes da oficina e botão "Mais" da barra de baixo */
+.seg.two { grid-template-columns: 1fr 1fr; }
+.rbar { display: block; height: 4px; border-radius: 2px; background: var(--surface-2); margin-top: 8px; overflow: hidden; }
+.rbar u { display: block; height: 100%; border-radius: 2px; text-decoration: none; transition: width .4s ease; }
+.more-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px; }
+.more-tile { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 6px 14px; border-radius: 18px; background: var(--surface-2); font-size: 13px; font-weight: 600; border: 1px solid transparent; }
+.more-tile svg { width: 28px; height: 28px; stroke: var(--accent); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.more-tile.on { border-color: var(--accent); }
+.nav button.on.just[data-tab=more] svg { animation-name: navPop; animation-duration: .4s; }
+
+/* Carro: durante a troca Combustível ↔ Oficina, só anima o conjunto (os cartões não têm a sua animação de entrada) */
+.car-body.swapping :where(.card, .big-total, .reminder) { animation: none; }
+.car-body.swapping { will-change: transform, opacity; }
+
+/* Botão de ajuda ao lado do título do Automóvel, e o mini guia */
+.help-btn { width: 24px; height: 24px; margin-left: 6px; border-radius: 50%; font-size: 13px; font-weight: 700; line-height: 1; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); vertical-align: middle; position: relative; top: -3px; }
+.help-btn:active { transform: scale(.92); }
+.help-sec { margin-bottom: 16px; }
+.help-sec > b { display: block; font-size: 15px; margin-bottom: 4px; }
+.help-sec p { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0; }
+.help-sec p b { color: var(--text); }
+
+/* Pagamentos fixos variáveis: os que ainda esperam o valor real */
+.pend-box { margin: 0 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.pend-box > b { display: block; font-size: 13px; color: var(--muted); margin: 2px 0 2px; }
+
+/* Seta própria nas listas (a nativa ficava colada ao canto) */
+select.input { -webkit-appearance: none; appearance: none; padding-right: 46px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2718%27 height=%2718%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%238b93a3%27 stroke-width=%272.4%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 16px center; background-size: 18px; }
+
+/* Fila de pontos dos cartões de total: o número grande em cima, o resto por baixo */
+.big-total .bt-stats { display: flex; gap: 12px; margin-top: 14px; }
+.big-total .bt-stats > div { flex: 1 1 0; min-width: 0; border-top: 1px solid color-mix(in srgb, currentColor 28%, transparent); padding-top: 8px; }
+.big-total .bt-stats strong { display: block; font-size: 15px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; }
+.big-total .bt-stats em { display: block; font-style: normal; font-size: 12px; font-weight: 600; opacity: .75; margin-top: 1px; }
+
+
+/* Barras e Linha de gráfico nos cartões: o mesmo fundo escuro e as mesmas cores da capa (nada do gradiente claro por baixo) */
+.cv-foot[data-k=bars] .ft { opacity: 1; -webkit-mask-image: none; mask-image: none; height: 100%; }
+.cv-foot[data-k=bars] .br { bottom: 14px; background: var(--bs-a); }
+.cv-foot[data-k=bars] .br:nth-child(3n) { background: var(--bs-b); }
+.cv-foot[data-k=bars]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 13px; height: 2px; background: var(--bs-a); }
+.cv-foot[data-k=linechart] .ft { opacity: 1; }
+.cv-foot[data-k=linechart] .ar { fill: var(--bs-a); fill-opacity: .16; }
+.cv-foot[data-k=linechart] .ln { stroke: var(--bs-a); }
+.cv-foot[data-k=linechart] .dt { background: var(--bs-b); }
+/* Cartão redondo: as barras e a linha de base ficam afastadas dos cantos */
+.cv-foot[data-k=bars] .ft { left: 22px; right: 22px; }
+.cv-foot[data-k=bars]::after { left: 22px; right: 22px; border-radius: 1px; }
+
+/* Capa com Barras: sem linhas de grelha e com as barras afastadas dos cantos redondos */
+.cover .cv.cv-bars { inset: 0 22px; }
+
+/* Néon nos cartões: a linha fina do rodapé e os feixes de luz (movidos por startNeonSweep) */
+.cv-card.cv-neon .nx-trk { position: absolute; left: 18px; right: 18px; bottom: 12px; height: 2px; border-radius: 2px; overflow: hidden; background: color-mix(in srgb, var(--ne-a) 28%, transparent); }
+.cv-card.cv-neon .nx-bm { position: absolute; top: 0; left: -60%; width: 40%; height: 2px; display: none; }
+
+/* Néon na capa: chão em grelha que avança (cada linha horizontal desce até à posição da seguinte e recomeça sem emenda) */
+.cv-neon svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cv-neon .nf-l { animation: neFlow 3s linear infinite; will-change: transform; }
+@keyframes neFlow { from { transform: translateY(0); } to { transform: translateY(var(--dy)); } }      /* sem mudar a opacidade: no fim, cada linha está onde a seguinte começou, por isso o ciclo recomeça sem salto */
+@media (prefers-reduced-motion: reduce) { .cv-neon .nf-l { animation-play-state: paused !important; animation-delay: -1.5s !important; } }
+
+/* A foto do perfil nunca sai do círculo: o recorte passa a estar na própria imagem (o recorte do pai falhava quando a capa tinha animações por baixo) */
+.avatar { isolation: isolate; }
+.avatar img { border-radius: 50%; clip-path: circle(50%); }
+
+/* Nos resumos: o nome da linha e, ao lado em cinzento, o separador de onde vem */
+.hline .n { display: flex; align-items: baseline; gap: 7px; }
+.hline .n .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hline .n .src { flex: none; color: var(--muted); font-size: 11px; }
+
+/* Medusas nos cartões: navegam da esquerda para a direita pela faixa de baixo (o fundo/capa mantém as medusas a subir) */
+.cv-card.cv-jelly .jf { bottom: 2px; left: -14%; animation-name: jcCross, jlPulse; }
+.cv-card.cv-jelly .jf:nth-child(2) { bottom: -6px; }
+@keyframes jcCross { 0% { left: -14%; opacity: 0; } 6% { opacity: var(--o); } 94% { opacity: var(--o); } 100% { left: 104%; opacity: 0; } }

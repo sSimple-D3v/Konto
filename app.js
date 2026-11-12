@@ -24,6 +24,9 @@ function migrateProfile(p) {
   p.bills = Array.isArray(p.bills) ? p.bills : [];        // contas de casa (renda, luz, água…)
   p.billLog = p.billLog && typeof p.billLog === 'object' && !Array.isArray(p.billLog) ? p.billLog : {};   // valor real das faturas: "idConta:AAAA-MM" → €
   p.bills.forEach(b => { b.created ||= now; });
+  p.carFix = Array.isArray(p.carFix) ? p.carFix : [];                   // pagamentos fixos do automóvel (seguro, IUC…)
+  p.carFix.forEach(c => { c.created ||= now; });
+  p.shopRems = Array.isArray(p.shopRems) ? p.shopRems : [];            // lembretes das outras despesas do carro (óleo, pneus, inspeção…)
   p.vehicles = Array.isArray(p.vehicles) ? p.vehicles : [];             // veículos do combustível
   const legacyFuel = p.spends.filter(s => s.cat === 'fuel' && s.liters > 0 && !s.veh);   // abastecimentos de antes de haver veículos
   if (legacyFuel.length) {
@@ -99,6 +102,9 @@ const CAL_STYLES = [['soft', 'Padrão'], ['min', 'Minimalista'], ['grid', 'Grelh
 const DEFAULT_THEME = { palette: 'esmeralda', style: 'gradient', mode: 'autolight', cal: 'soft', anim: false, cardStyle: false, speed: 1, amount: 3, day: 'default' };
 const DAY_STYLES = [['default', 'Padrão'], ['sticker', 'Autocolante']];
 const fxLevel = t => Math.min(5, Math.max(1, Math.round(+t?.amount || 3)));     // quantidade de efeitos: 1 (muito poucos) a 5 (muitos); 3 = o aspeto de sempre
+/* Regra dos efeitos: a QUANTIDADE (cursor "Quantidade de efeitos") só mexe no fundo (capa e miniaturas); os cartões usam sempre CARD_LEVEL, a quantidade padrão pensada para eles.
+   A VELOCIDADE (cursor "Velocidade") mexe nos dois. */
+const CARD_LEVEL = 3;
 const fxSpeed = t => Math.min(2, Math.max(.5, +t?.speed || 1));                  // velocidade das animações (0,5× a 2×)
 const FX_AMOUNT = ['Muito poucos', 'Poucos', 'Normal', 'Bastantes', 'Muitos'];
 const fxSpeedLabel = v => String(v).replace('.', ',') + '×';
@@ -165,7 +171,7 @@ function fluidVars(pal) {
     // Aquário e finanças
     '--kl-cover': 'var(--jl-cover)', '--kl-card': 'var(--jl-card)', '--kl-a': mixHex(c1, '#ffffff', .25), '--kl-b': mixHex(c1, c2, .5),
     '--jl-cover': `linear-gradient(180deg, ${dk(mixHex(c1, c2, .5), .45)} 0%, ${dk(c2, .88)} 100%)`, '--jl-card': `linear-gradient(180deg, ${dk(mixHex(c1, c2, .5), .4)} 0%, ${dk(c2, .8)} 100%)`, '--jl-a': mixHex(c1, '#ffffff', .45), '--jl-b': mixHex(c1, '#ffffff', .85),
-    '--bs-cover': `repeating-linear-gradient(180deg, transparent 0 29px, rgba(255,255,255,.07) 29px 30px), ${dk(c2, .9)}`, '--bs-card': `linear-gradient(${dk(c2, .88)}, ${dk(c2, .88)})`, '--bs-a': c1, '--bs-b': mixHex(c1, '#ffffff', .5),
+    '--bs-cover': `linear-gradient(${dk(c2, .9)}, ${dk(c2, .9)})`, '--bs-card': `linear-gradient(${dk(c2, .88)}, ${dk(c2, .88)})`, '--bs-a': c1, '--bs-b': mixHex(c1, '#ffffff', .5),
     '--lc-card': 'var(--bs-card)',
   };
 }
@@ -191,8 +197,6 @@ const CRACKS = [['l1', '<path class="crk" stroke-width="3" d="M0 120 L40 100 L70
 // Posições bem espalhadas em qualquer número de elementos (sequência R2), e o nível a partir do qual cada elemento aparece (limiares = quantos há em cada nível 1–5).
 const R2 = i => [(0.5 + 0.7548776662 * (i + 1)) % 1, (0.5 + 0.5698402910 * (i + 1)) % 1];
 const gen = (thr, f) => Array.from({ length: thr[thr.length - 1] }, (_, i) => { const [u, v] = R2(i); return { l: thr.findIndex(n => i < n) + 1, ...f(i, u, v) }; });
-const NEON_RINGS = [0, 1, 2, 3, 4].map(i => ({ l: i + 1, i, r: [12, 22, 32, 42, 54][i] }));
-const NEON_LINES = [{ y: 80, l: 2, k: 0 }, { y: 20, l: 3, k: 1 }, { y: 50, l: 5, k: 0 }];
 const CLOUDS = [[12, 100, 32, 18, -5, 1, 20], [66, 140, 38, 24, -14, 1, 70], [104, 90, 28, 15, -2, 2, 40], [36, 80, 26, 13, -9, 3, 85], [84, 120, 34, 20, -17, 4, 15], [0, 70, 22, 12, -7, 4, 55], [120, 110, 30, 19, -11, 5, 30], [50, 150, 40, 26, -20, 5, 75]]
   .map(([top, w, h, dur, delay, l, cx]) => ({ top, w, h, dur, delay, l, cx }));
 const RAIN = gen([10, 16, 24, 34, 48], (i, u, v) => ({ x: 2 + u * 96, h: 14 + ((i * 3) % 3) * 6, dur: .8 + ((i * 7) % 5) * .12, delay: -(v * 1.5) }));
@@ -203,7 +207,7 @@ const SHEENS = [{ l: 1, x: 30 }, { l: 3, x: 62 }, { l: 4, x: 12 }, { l: 5, x: 80
 // Corações a cintilar: tamanho em px, posição em %, e o nível a partir do qual cada um aparece
 const HEART_PATH = 'M12 21s-7.5-4.6-9.6-9.2C.9 8.2 3 5 6.2 5c2 0 3.5 1.1 4.3 2.4h3C14.3 6.1 15.8 5 17.8 5 21 5 23.1 8.2 21.6 11.8 19.5 16.4 12 21 12 21z';
 const HEART_LATTICE = Array.from({ length: 6 }, (_, row) => Array.from({ length: row % 2 ? 9 : 10 }, (_, col) => ({ x: (row % 2 ? 10 : 5) + col * 10, y: 10 + row * 16 }))).flat();   // grelha centrada: as linhas ficam simétricas em relação ao meio
-const HEARTS_CARD = lvl => Array.from({ length: [5, 8, 11, 13, 15][lvl - 1] }, (_, i) => { const k = (i * 7) % 15, c = k % 3, r = Math.floor(k / 3); return { x: 84 + ((c - 1) + (r % 2 ? .25 : -.25)) * 9.5, y: 18 + r / 4 * 64, s: 18, dx: 0, r: 0, dur: 1.4 + ((i * 7) % 5) * .3, delay: -((i * .37) % 3) }; });   // nos cartões: uma coluna à direita, o lado do texto fica livre
+const HEARTS_CARD = lvl => { const n = [6, 8, 10, 12, 14][lvl - 1]; return Array.from({ length: n }, (_, i) => ({ x: 9 + i * 82 / (n - 1), y: 88, s: 13, dx: 0, r: 0, dur: 2.4, delay: -(i * .22) })); };   // nos cartões: uma fila pequena no rodapé, por baixo dos números, a acender em onda
 const HEARTS = {
   hgrid: gen([10, 18, 32, 44, 57], (i) => { const p = HEART_LATTICE[(i * 37) % 57]; return { x: p.x, y: p.y, s: 23, dx: 0, r: 0, dur: 1.4 + ((i * 7) % 5) * .3, delay: -((i * .37) % 3) }; }),
 };
@@ -216,12 +220,25 @@ const JELLY = [
   ...gen([2, 4, 6, 8, 10], (i, u, v) => ({ x: 8 + u * 84, w: 14 + (i % 2) * 4, dur: 18 + v * 6, delay: -(v * 24), dx: (u - .5) * 20, far: true, y: 15 + v * 70 })),
   ...gen([1, 2, 3, 4, 5], (i, u, v) => ({ x: [78, 18, 52, 90, 36][i], w: 34 + (i % 2) * 10, dur: 10 + v * 3, delay: -(v * 13), dx: (u - .5) * 30, far: false, y: 25 + v * 55 })),
 ];
-const jellyX = (j, card) => card ? 72 + (j.x - 8) / 84 * 24 : j.x;
+const JELLY_CARD = [{ x: 24, w: 22, y: 80, dur: 14, delay: 0, o: .85 }, { x: 52, w: 16, y: 87, dur: 20, delay: -8, o: .5 }, { x: 78, w: 26, y: 76, dur: 17, delay: -4, o: .7 }];      // nos cartões: três medusas que navegam pela faixa de baixo, por baixo dos números
 // Algas e bolhas: algas a balançar (nos cantos da capa, na coluna da direita do cartão) e bolhas a subir
 const KELP_W = [3, 94, 9, 87, 15, 80, 21, 73].map((x, i) => ({ x, cx: [95, 72, 88, 80, 92, 76, 84, 68][i], l: [1, 1, 2, 3, 4, 4, 5, 5][i], h: 40 + ((i * 37) % 5) * 6, dur: 3 + ((i * 7) % 5) * .4, k: i % 2 }));
 const KELP_B = gen([4, 6, 9, 12, 16], (i, u, v) => ({ x: 4 + u * 92, s: 4 + (i % 3) * 2, dur: 4 + v * 4, delay: -(v * 8) }));
 const kelpPath = h => 'M8 ' + h + ' C0 ' + (h * .7) + ' 16 ' + (h * .5) + ' 8 ' + (h * .25) + ' C4 ' + (h * .12) + ' 10 0 8 0';
 const JELLY_SVG = (a, b, sc) => `<g transform='scale(${sc})'><path d='M4 24 C4 4 36 4 36 24Z' fill='${a}'/><path d='M10 24 C10 12 30 12 30 24Z' fill='${b}' fill-opacity='.6'/><g stroke='${a}' stroke-width='1.8' fill='none' stroke-linecap='round'><path d='M10 24 Q6 36 10 46'/><path d='M16 24 Q20 38 15 52'/><path d='M24 24 Q20 38 25 52'/><path d='M30 24 Q34 36 30 46'/></g></g>`;
+/* Néon (capa e miniaturas): sol e chão em grelha em perspetiva (estilo retro). O nível 1–5 define quantas linhas há; animado, as linhas horizontais avançam para o espetador (CSS, por linha). */
+function neonFloor(lvl, anim, A, B, bg) {
+  const n = [3, 4, 5, 6, 7][lvl - 1] || 5, m = [5, 7, 9, 11, 13][lvl - 1] || 9, H = 70, ys = Array.from({ length: n + 1 }, (_, k) => H + 80 * Math.pow(k / n, 2));
+  const two = (x1, y1, x2, y2, wide, thin, cls = '', sty = '') => `<g${cls ? ` class="${cls}"` : ''}${sty ? ` style="${sty}"` : ''}><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${A};stroke-width:${wide};stroke-opacity:.22"/><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${A};stroke-width:${thin}"/></g>`;
+  const fan = Array.from({ length: m }, (_, j) => { const xe = 170 + (j - (m - 1) / 2) * (740 / (m - 1)); return two(170, H, xe.toFixed(1), 150, 3.6, 1); }).join('');
+  const hz = ys.slice(anim ? 0 : 1, n).map((y, i) => { const k = i + (anim ? 0 : 1); return two(0, y.toFixed(1), 340, y.toFixed(1), 3.6, 1, anim ? 'nf-l' : '', anim ? `--dy:${(ys[k + 1] - y).toFixed(2)}px` : ''); }).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs>
+    <linearGradient id="nfg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${B}"/><stop offset="1" style="stop-color:${A}"/></linearGradient>
+    <linearGradient id="nfh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${A};stop-opacity:0"/><stop offset="1" style="stop-color:${A};stop-opacity:.28"/></linearGradient></defs>
+    <rect x="0" y="40" width="340" height="30" fill="url(#nfh)"/>
+    <path d="M132 70A38 38 0 0 1 208 70Z" fill="url(#nfg)" fill-opacity=".9"/>
+    ${fan}${hz}${two(0, H, 340, H, 4.4, 1.6)}</svg>`;
+}
 function fluidInner(kind, lvl = fxLevel(appliedTheme), foot = false, card = false) {      // os elementos que se mexem em cada estilo animado
   switch (kind) {
     case 'magma': return upTo(MG_BLOBS, lvl).map(b => '<i class="bl" style="width:' + b.w + 'px;height:' + b.w + 'px;left:' + b.left + '%;margin-left:-' + b.w / 2 + 'px;bottom:' + b.bottom + 'px;animation:mgRise' + b.k + ' ' + b.dur + 's ease-in-out ' + b.delay + 's infinite"></i>').join('')
@@ -229,20 +246,21 @@ function fluidInner(kind, lvl = fxLevel(appliedTheme), foot = false, card = fals
     case 'embers': return upTo(EMBERS, lvl).map(e => '<i class="em" style="left:' + e.left + '%;width:' + e.size + 'px;height:' + e.size + 'px;--dx:' + e.dx + 'px;animation-delay:' + e.delay + 's;animation-duration:' + e.dur + 's"></i>').join('');
     case 'hgrid':
       return (card ? HEARTS_CARD(lvl) : upTo(HEARTS[kind], lvl)).map(h => '<i class="ht" style="left:' + h.x + '%;top:' + h.y + '%;margin:-' + h.s / 2 + 'px 0 0 -' + h.s / 2 + 'px;width:' + h.s + 'px;height:' + h.s + 'px;--dx:' + h.dx + 'px;--r:' + h.r + 'deg;animation-duration:' + h.dur + 's;animation-delay:' + h.delay + 's"></i>').join('');
-    case 'bars': return barsFor(lvl).map(b => '<i class="br" style="left:' + b.x + '%;width:' + b.w + '%;margin-left:-' + b.w / 2 + '%;height:' + Math.round(b.h * (foot ? 1.35 : 1)) + 'px;animation-duration:' + b.dur + 's;animation-delay:' + b.delay + 's"></i>').join('');
+    case 'bars': return barsFor(lvl).map(b => '<i class="br" style="left:' + b.x + '%;width:' + b.w + '%;margin-left:-' + b.w / 2 + '%;height:' + Math.round(b.h * (foot ? .68 : 1)) + 'px;animation-duration:' + b.dur + 's;animation-delay:' + b.delay + 's"></i>').join('');
     case 'linechart': {                              // duas voltas lado a lado; a faixa desliza uma volta e recomeça sem emenda (a linha sai pela direita e volta a entrar)
       const P = linePts(lvl), PP = [...P, ...P.slice(1).map(p => ({ x: p.x + 300, y: p.y }))], pl = PP.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
       return '<div class="lc-track"><svg viewBox="0 0 600 150" preserveAspectRatio="none" aria-hidden="true"><path class="ar" d="M0 150 L' + PP.map(p => p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' L') + ' L600 150Z"/><polyline class="ln" points="' + pl + '"/></svg>'
         + PP.map(p => '<i class="dt" style="left:' + (p.x / 6).toFixed(2) + '%;top:' + (p.y / 1.5).toFixed(2) + '%"></i>').join('') + '</div>'; }
-    case 'jelly': return upTo(JELLY, lvl).map(j => '<i class="jf ' + (j.far ? 'far' : 'near') + '" style="left:' + jellyX(j, card).toFixed(1) + '%;margin-left:-' + j.w / 2 + 'px;width:' + j.w + 'px;height:' + Math.round(j.w * 1.4) + 'px;--dx:' + j.dx.toFixed(1) + 'px;--o:' + (j.far ? .25 : .82) + ';animation-duration:' + j.dur + 's,2.6s;animation-delay:' + j.delay + 's,' + (j.delay / 3) + 's"></i>').join('');
+    case 'jelly': if (card) return JELLY_CARD.map(j => '<i class="jf" style="width:' + j.w + 'px;height:' + Math.round(j.w * 1.4) + 'px;--o:' + j.o + ';animation-duration:' + j.dur + 's,2.6s;animation-delay:' + j.delay + 's,' + (j.delay / 3) + 's"></i>').join('');
+      return upTo(JELLY, lvl).map(j => '<i class="jf ' + (j.far ? 'far' : 'near') + '" style="left:' + j.x.toFixed(1) + '%;margin-left:-' + j.w / 2 + 'px;width:' + j.w + 'px;height:' + Math.round(j.w * 1.4) + 'px;--dx:' + j.dx.toFixed(1) + 'px;--o:' + (j.far ? .25 : .82) + ';animation-duration:' + j.dur + 's,2.6s;animation-delay:' + j.delay + 's,' + (j.delay / 3) + 's"></i>').join('');
     case 'kelp': {
-      const k = card ? .8 : 1;
+      const k = card ? .62 : 1;
       return KELP_W.filter(w => w.l <= lvl).map(w => { const h = Math.round(w.h * k); return '<svg class="wd" viewBox="0 0 16 ' + h + '" style="left:' + (card ? w.cx : w.x) + '%;width:16px;height:' + h + 'px;animation-duration:' + w.dur + 's;animation-delay:' + (-w.dur * (w.x % 3) / 3) + 's"><path d="' + kelpPath(h) + '" fill="none" stroke-width="5" stroke-linecap="round" style="stroke:var(--kl-' + (w.k ? 'b' : 'a') + ')"/></svg>'; }).join('')
         + upTo(KELP_B, lvl).map(b => '<i class="bb" style="left:' + (card ? 64 + (b.x - 4) / 92 * 33 : b.x).toFixed(1) + '%;width:' + b.s + 'px;height:' + b.s + 'px;animation-duration:' + b.dur + 's;animation-delay:' + b.delay + 's"></i>').join('');
     }
     case 'crust': return '<svg viewBox="0 0 300 150" preserveAspectRatio="none" aria-hidden="true">' + upTo(CRACKS, lvl).map(c => '<g class="' + c.c + '">' + c.p + '</g>').join('') + '</svg>';
-    case 'neon': return upTo(NEON_RINGS, lvl).map(r => '<i class="rg ' + (r.i % 2 ? 'b' : 'a') + '" style="' + (card ? 'left:88%;top:50%;' : '') + 'animation-delay:' + (-r.i * .72) + 's"></i>').join('')
-      + upTo(NEON_LINES, lvl).map(n => '<i class="ln ' + (n.k ? 'b' : 'a') + '" style="' + (card ? 'left:55%;' : '') + 'top:' + n.y + '%;animation-delay:' + (-n.y / 30) + 's"></i>').join('');
+    case 'neon': if (card) return '<div class="nx-trk"><i class="nx-bm"></i><i class="nx-bm"></i></div>';      // cartões: só uma linha fina no rodapé com feixes de luz (ver startNeonSweep)
+      return neonFloor(lvl, true, 'var(--ne-a)', 'var(--ne-b)', 'var(--ne-cover)');       // capa: sol e chão em grelha
     case 'clouds': return upTo(CLOUDS, lvl).map((c, i) => '<i class="cd" style="top:' + (card ? (i % 2 ? 108 : -6) : c.top) + 'px;width:' + c.w + 'px;height:' + c.h + 'px;animation-duration:' + c.dur + 's;animation-delay:' + c.delay + 's"></i>').join('');
     case 'rain': return upTo(RAIN, lvl).map(d => '<i class="dr' + (d.h > 20 ? ' b' : '') + '" style="left:' + d.x + '%;height:' + d.h + 'px;animation-duration:' + d.dur + 's;animation-delay:' + d.delay + 's"></i>').join('');
     case 'marble': return '<svg viewBox="0 0 300 150" preserveAspectRatio="none" aria-hidden="true">' + upTo(MARBLE, lvl).map(v => '<g class="' + v.c + '"><path class="mv" stroke-width="' + v.w + '" d="' + v.d + '"/></g>').join('') + '</svg>';
@@ -255,20 +273,55 @@ const fluidMotion = t => ALWAYS_ANIM.includes(t.style) && !!t.anim && !matchMedi
 const CLASSIC_CARD = ['pixel', 'aurora', 'grid', 'conic'];       // estilos "normais" que também animam nos cartões (a camada roda/desliza como na capa)
 const classicCardMotion = t => !!t.cardStyle && !!t.anim && !ALWAYS_ANIM.includes(t.style) && CLASSIC_CARD.includes(t.style) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
 const FOOT_KINDS = ['bars', 'linechart'];      // nos cartões não ficam bem a ocupar tudo: têm o seu próprio "rodapé suave" (faixa em baixo, esbatida), sobre o gradiente normal do cartão
+/* Fila de pontos no fundo de um cartão de total: [[valor, legenda], …]. Cada cartão mostra primeiro o que mais importa (o número grande) e só depois estes. */
+const btStats = items => `<div class="bt-stats">${items.filter(Boolean).map(([v, l]) => `<div><strong>${v}</strong><em>${l}</em></div>`).join('')}</div>`;
+/* Néon nos cartões: uma linha fina no rodapé, com feixes de luz. Cada ciclo sorteia uma de quatro variações (sem repetir a anterior):
+   vai e volta com ritmos diferentes · cor e largura que mudam · dois feixes que se cruzam · tudo sorteado (direção, velocidade, pausa, faísca). */
+function startNeonSweep(layer) {
+  const trk = layer?.querySelector('.nx-trk'); if (!trk || layer._nx) return; layer._nx = true;
+  const bm = [...trk.querySelectorAll('.nx-bm')];
+  const COL = ['var(--ne-a)', 'var(--ne-b)', 'color-mix(in srgb, var(--ne-a) 50%, #fff)'], GL = ['var(--ne-ga)', 'var(--ne-gb)', 'var(--ne-ga)'];
+  const rnd = (a, b) => a + Math.random() * (b - a), pick = n => Math.floor(Math.random() * n), wait = ms => new Promise(r => setTimeout(r, ms));
+  const run = (el, w, ci, dir, d, ease = 'linear') => {                          // uma passagem de um feixe
+    el.style.display = 'block'; el.style.width = w + '%'; el.style.background = `linear-gradient(90deg, transparent, ${COL[ci]}, transparent)`; el.style.boxShadow = `0 0 8px ${GL[ci]}`;
+    const a = el.animate([{ left: (dir > 0 ? -w : 100) + '%' }, { left: (dir > 0 ? 100 : -w) + '%' }], { duration: d * 1000, easing: ease, fill: 'forwards' });
+    a.playbackRate = fxSpeed(appliedTheme);
+    return a.finished;
+  };
+  let last = -1;
+  (async () => {
+    try {
+      while (layer.isConnected) {
+        if (!fluidMotion(appliedTheme) || document.hidden) { await wait(800); continue; }
+        let m; do m = pick(4); while (m === last); last = m;
+        bm[1].style.display = 'none';
+        if (m === 0) { await run(bm[0], 35, 0, 1, rnd(3, 3.8), 'ease-in-out'); await run(bm[0], 35, 0, -1, rnd(1.6, 2), 'ease-in-out'); }
+        else if (m === 1) { const W = [45, 20, 32], i = pick(3); await run(bm[0], W[i], i, 1, 2.6); }
+        else if (m === 2) await Promise.all([run(bm[0], 30, 0, 1, rnd(2.2, 3.4)), run(bm[1], 24, 1, -1, rnd(3, 3.8))]);
+        else {
+          await run(bm[0], Math.round(rnd(15, 55)), pick(3), Math.random() < .5 ? 1 : -1, rnd(1.4, 4));
+          if (Math.random() < .25) await trk.animate([{ filter: 'brightness(1)' }, { filter: 'brightness(3)' }, { filter: 'brightness(1)' }], { duration: 500 }).finished;
+          await wait(Math.round(rnd(0, 1100)));
+        }
+        await wait(250);
+      }
+    } catch { layer._nx = false; }                                                // a camada foi removida a meio: acaba em silêncio
+  })();
+}
 function decorateTotals() {                         // nos cartões de total, acrescenta a camada do estilo animado e tira-a se o estilo mudar ou as animações se desligarem
   const t = appliedTheme, foot = t.cardStyle && FOOT_KINDS.includes(t.style) ? t.style : null;
   const fk = !foot && t.cardStyle && fluidMotion(t) ? t.style : null, ck = classicCardMotion(t) ? t.style : null;
-  const kind = foot || fk || ck, key = foot ? fxLevel(t) + (t.anim ? 'a' : 's') : fk ? String(fxLevel(t)) : ck ? t.palette : '';
+  const kind = foot || fk || ck, key = foot ? CARD_LEVEL + (t.anim ? 'a' : 's') : fk ? String(CARD_LEVEL) : ck ? t.palette : '';
   document.querySelectorAll('.big-total').forEach(c => {
     const cur = c.querySelector(':scope > .cv-card');
     if (cur && cur.dataset.k === kind && cur.dataset.n === key) return;
     cur?.remove();
-    if (foot) c.insertAdjacentHTML('afterbegin', `<div class="cv-card cv-foot" data-k="${foot}" data-n="${key}"${t.anim ? '' : ' data-still="1"'}><div class="ft">${fluidInner(foot, fxLevel(t), true)}</div></div>`);
-    else if (fk) c.insertAdjacentHTML('afterbegin', `<div class="cv cv-card cv-${fk}" data-k="${fk}" data-n="${key}">${fluidInner(fk, +key, false, true)}</div>`);
+    if (foot) c.insertAdjacentHTML('afterbegin', `<div class="cv-card cv-foot" data-k="${foot}" data-n="${key}"${t.anim ? '' : ' data-still="1"'}><div class="ft">${fluidInner(foot, CARD_LEVEL, true)}</div></div>`);
+    else if (fk) { c.insertAdjacentHTML('afterbegin', `<div class="cv cv-card cv-${fk}" data-k="${fk}" data-n="${key}">${fluidInner(fk, +key, false, true)}</div>`); if (fk === 'neon') startNeonSweep(c.querySelector(':scope > .cv-card')); }
     else if (ck) { const wr = document.createElement('div'); wr.className = 'cv-card cvw'; wr.dataset.k = ck; wr.dataset.n = key; const d = document.createElement('div'); d.className = 'cvc'; d.dataset.k = ck; d.style.background = coverLayer(ck, palOf(t.palette)); wr.appendChild(d); c.prepend(wr); }
   });
   // Animação padrão do cartão (com as animações ligadas): duas manchas de cor, uma de cada cor da paleta, a deslizar devagar uma contra a outra.
-  const drift = !!t.anim && !fk && !ck && !(t.cardStyle && t.style === 'solid');
+  const drift = !!t.anim && !fk && !ck && !foot && !(t.cardStyle && t.style === 'solid');
   document.querySelectorAll('.big-total').forEach(c => {
     const d = c.querySelector(':scope > .cv-drift');
     if (!drift) { d?.remove(); return; }
@@ -290,6 +343,7 @@ function coverLayer(style, pal) {
 }
 function themeBg(style, pal, small = false, card = false) {     // o "fundo de destaque" de cada estilo (valor de `background`); small = miniatura da lista
   const [c1, c2] = pal.g, lin = `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`, w = a => `rgba(255,255,255,${a})`;
+  const lv = card ? CARD_LEVEL : fxLevel(appliedTheme);       // nos cartões, a quantidade é sempre a padrão
   switch (style) {
     case 'solid': return pal.s;
     case 'pixel': return `url(${pixelGradient(c1, c2)}) center / 100% 100% no-repeat`;
@@ -298,7 +352,7 @@ function themeBg(style, pal, small = false, card = false) {     // o "fundo de d
     case 'conic': return `conic-gradient(from 210deg at ${card ? 80 : 50}% 50%, ${c1}, ${c2}, ${c1})`;
     // Imagens paradas (miniaturas da lista e cartões/capa sem animações). Os raios das bolhas estão em % do tamanho da caixa, por isso escalam do mosaico pequeno ao cartão grande.
     case 'magma': {      // a mesma imagem do fundo animado: bolhas grandes com brilho no canto, bolinhas pequenas e o mesmo degradê
-      const dk = (h, k) => mixHex(h, '#000000', k), mid = mixHex(c1, c2, .5), lv = fxLevel(appliedTheme), yb = small ? 92 : 88.5;
+      const dk = (h, k) => mixHex(h, '#000000', k), mid = mixHex(c1, c2, .5), yb = small ? 92 : 88.5;
       const blobs = upTo(MG_BLOBS, lv).map((b, i) => { const r = b.w / 2 / 1.95, lift = ((i * 37) % 5) / 5 * 60; return `<circle cx='${(b.left * 2).toFixed(1)}' cy='${(yb - (b.bottom + b.w / 2 + lift) / 1.95).toFixed(1)}' r='${r.toFixed(1)}' fill='url(#g)' fill-opacity='.95'/>`; }).join('');
       const bubs = upTo(MG_BUBBLES, lv).map((b, i) => `<circle cx='${(b.left * 2).toFixed(1)}' cy='${(yb - 14 - ((i * 53) % 9) * 6).toFixed(1)}' r='${(b.w / 2 / 1.95 * 1.6).toFixed(1)}' fill='#fff' fill-opacity='.5'/>`).join('');
       const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'><defs><radialGradient id='g' cx='.35' cy='.3' r='.955'><stop offset='0' stop-color='${c1}'/><stop offset='.38' stop-color='${mid}'/><stop offset='.72' stop-color='${c2}' stop-opacity='0'/></radialGradient></defs>${blobs}${bubs}</svg>`;
@@ -307,19 +361,19 @@ function themeBg(style, pal, small = false, card = false) {     // o "fundo de d
     case 'ocean': {
       const dk = (h, k) => mixHex(h, '#000000', k), rgba = (h, a) => `rgba(${hexRgb(h).join(',')},${a})`;
       const fills = ['rgba(255,255,255,.3)', rgba(dk(c2, .2), .55), rgba(dk(c2, .45), .88)];
-      const ws = upTo([{ y: 28, f: 0, l: 4 }, { y: 38, f: 0, l: 3 }, { y: 58, f: 1, l: 2 }, { y: 68, f: 1, l: 5 }, { y: 77, f: 2, l: 1 }], fxLevel(appliedTheme));
+      const ws = upTo([{ y: 28, f: 0, l: 4 }, { y: 38, f: 0, l: 3 }, { y: 58, f: 1, l: 2 }, { y: 68, f: 1, l: 5 }, { y: 77, f: 2, l: 1 }], lv);
       const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='none'>${ws.map(({ y, f }) => `<path fill='${fills[f]}' d='M0 ${y} Q25 ${y - 17} 50 ${y} T100 ${y} T150 ${y} T200 ${y} V100 H0Z'/>`).join('')}</svg>`;
       return `url(${svgUri(svg)}) center / 100% 100% no-repeat, linear-gradient(180deg, ${mixHex(c1, '#ffffff', .2)} 0%, ${c1} 30%, ${c2} 100%)`;
     }
     case 'embers': {
       const dk = (h, k) => mixHex(h, '#000000', k), dot = mixHex(c1, '#ffffff', .4), glow = `rgba(${hexRgb(c1).join(',')},.55)`;
       const e = (x, y, r) => `radial-gradient(circle at ${x}% ${y}%, ${dot} 0 ${r}px, ${glow} ${r + 1}px, transparent ${r + 6}px)`;
-      const es = upTo([[33, 40, 1.5, 1], [78, 58, 2, 1], [16, 66, 2, 2], [64, 30, 1.5, 2], [50, 74, 2.5, 3], [90, 22, 1.5, 3], [8, 30, 1.5, 4], [42, 82, 2, 4], [70, 70, 1.5, 4], [24, 18, 1.5, 5], [58, 50, 2, 5], [84, 80, 2, 5]].map(([x, y, r, l]) => ({ x, y, r, l })), fxLevel(appliedTheme));
+      const es = upTo([[33, 40, 1.5, 1], [78, 58, 2, 1], [16, 66, 2, 2], [64, 30, 1.5, 2], [50, 74, 2.5, 3], [90, 22, 1.5, 3], [8, 30, 1.5, 4], [42, 82, 2, 4], [70, 70, 1.5, 4], [24, 18, 1.5, 5], [58, 50, 2, 5], [84, 80, 2, 5]].map(([x, y, r, l]) => ({ x, y, r, l })), lv);
       return `${es.map(q => e(q.x, q.y, q.r)).join(', ')}, radial-gradient(ellipse at 50% 125%, ${mixHex(c1, c2, .35)} 0, ${dk(c2, .35)} 45%, ${dk(c2, .8)} 90%)`;
     }
     case 'hgrid': {      // corações: imagem parada com tantos corações quantos o nível de "Quantidade"
       const dk = (h, k) => mixHex(h, '#000000', k), a = mixHex(c1, '#ffffff', .3), b = mixHex(c1, '#ffffff', .7);
-      const items = (card ? HEARTS_CARD(fxLevel(appliedTheme)) : upTo(HEARTS[style], fxLevel(appliedTheme))).filter((p, i) => !small || i % 2 === 0);
+      const items = (card ? HEARTS_CARD(lv) : upTo(HEARTS[style], lv)).filter((p, i) => !small || i % 2 === 0);
       const hs = items.map((p, i) => { const sc = (p.s / 1.95 / 24) * (small ? 1.55 : 1), op = i % 2 ? .45 : .9;
         return `<path fill='${i % 3 ? a : b}' fill-opacity='${op}' transform='translate(${(p.x * 2).toFixed(1)} ${(style === 'hgrid' ? p.y : 6 + p.y * .88).toFixed(1)}) rotate(${Math.round(p.r)}) scale(${sc.toFixed(3)}) translate(-12 -12)' d='${HEART_PATH}'/>`; }).join('');
       const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'>${hs}</svg>`;
@@ -327,55 +381,54 @@ function themeBg(style, pal, small = false, card = false) {     // o "fundo de d
     }
     case 'jelly': {      // miniaturas nítidas, desenhadas em vetor: as de trás apagadas, as da frente nítidas
       const dk = (h, k) => mixHex(h, '#000000', k), a = mixHex(c1, '#ffffff', .45), b = mixHex(c1, '#ffffff', .85);
-      const js = upTo(JELLY, fxLevel(appliedTheme)).sort((p, q) => (q.far ? 1 : 0) - (p.far ? 1 : 0)).map(j => { const sc = (j.w / 1.95 / 40) * (small ? 1.5 : 1); return `<g opacity='${j.far ? .3 : .9}' transform='translate(${(jellyX(j, card) * 2 - 20 * sc).toFixed(1)} ${(j.y - 10).toFixed(1)})'>${JELLY_SVG(a, b, sc.toFixed(3))}</g>`; }).join('');
+      const list = card ? JELLY_CARD : upTo(JELLY, lv).sort((p, q) => (q.far ? 1 : 0) - (p.far ? 1 : 0));
+      const js = list.map(j => { const sc = (j.w / 1.95 / 40) * (small ? 1.5 : 1); return `<g opacity='${card ? j.o : j.far ? .3 : .9}' transform='translate(${(j.x * 2 - 20 * sc).toFixed(1)} ${card ? j.y : (j.y - 10).toFixed(1)})'>${JELLY_SVG(a, b, sc.toFixed(3))}</g>`; }).join('');
       const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'>${js}</svg>`;
       return `url(${svgUri(svg)}) center / 100% 100% no-repeat, linear-gradient(180deg, ${dk(mixHex(c1, c2, .5), .45)} 0%, ${dk(c2, .88)} 100%)`;
     }
     case 'kelp': {
-      const dk = (h, k) => mixHex(h, '#000000', k), A = mixHex(c1, '#ffffff', .25), B = mixHex(c1, c2, .5), lv = fxLevel(appliedTheme), yb = small ? 100 : 88.5, k = card ? .8 : 1, sc = (small ? 1.5 : 1) / 1.95;
+      const dk = (h, k) => mixHex(h, '#000000', k), A = mixHex(c1, '#ffffff', .25), B = mixHex(c1, c2, .5), yb = small ? 100 : 88.5, k = card ? .62 : 1, sc = (small ? 1.5 : 1) / 1.95;
       const wd = KELP_W.filter(w => w.l <= lv).map(w => { const h = Math.round(w.h * k); return `<g transform='translate(${((card ? w.cx : w.x) * 2 - 8 * sc).toFixed(1)} ${(yb - h * sc).toFixed(1)}) scale(${sc.toFixed(3)})'><path d='${kelpPath(h)}' fill='none' stroke='${w.k ? B : A}' stroke-width='5' stroke-linecap='round'/></g>`; }).join('');
       const bb = upTo(KELP_B, lv).filter((b, i) => !small || i % 2 === 0).map((b, i) => `<circle cx='${((card ? 64 + (b.x - 4) / 92 * 33 : b.x) * 2).toFixed(1)}' cy='${(yb - 14 - ((i * 53) % 9) * 7).toFixed(1)}' r='${(b.s / 2 * sc).toFixed(2)}' fill='none' stroke='#ffffff' stroke-opacity='.65' stroke-width='.6'/>`).join('');
       const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'>${wd}${bb}</svg>`;
       return `url(${svgUri(svg)}) center / 100% 100% no-repeat, linear-gradient(180deg, ${dk(mixHex(c1, c2, .5), .45)} 0%, ${dk(c2, .88)} 100%)`;
     }
     case 'bars': case 'linechart': {
-      const dk = (h, k) => mixHex(h, '#000000', k), lv = fxLevel(appliedTheme), a = c1, b = mixHex(c1, '#ffffff', .5), dn = mixHex('#ff5a6a', c2, .2), by = 80;
-      const grid = [30, 55, 80].map(y => `<path d='M0 ${y}H200' stroke='#ffffff' stroke-opacity='.08' stroke-width='.6'/>`).join('');
+      const dk = (h, k) => mixHex(h, '#000000', k), a = c1, b = mixHex(c1, '#ffffff', .5), by = 80;
       let body = '';
       if (style === 'bars') body = barsFor(lv).map((q, i) => { const w = q.w * 2 * .9, h = q.h / 1.95 * (small ? 1.1 : 1); return `<rect x='${(q.x * 2 - w / 2).toFixed(1)}' y='${(by - h).toFixed(1)}' width='${w.toFixed(1)}' height='${h.toFixed(1)}' rx='1' fill='${i % 3 ? a : b}'/>`; }).join('') + `<rect x='0' y='${by}' width='200' height='1.2' fill='${a}'/>`;
+      if (style === 'bars') body = `<g transform='translate(10 0) scale(.9 1)'>${body}</g>`;      // as barras ficam afastadas dos cantos redondos
       else { const P = linePts(lv).map(p => [p.x / 1.5, p.y / 1.5]); body = `<path d='M0 100 L${P.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L')} L200 100Z' fill='${a}' fill-opacity='.18'/><polyline points='${P.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')}' fill='none' stroke='${a}' stroke-width='${small ? 2.6 : 2.2}' stroke-linejoin='round' stroke-linecap='round'/>` + P.map(p => `<circle cx='${p[0].toFixed(1)}' cy='${p[1].toFixed(1)}' r='${small ? 2.6 : 2}' fill='${b}'/>`).join(''); }
-      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'>${grid}${body}</svg>`;
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'>${body}</svg>`;
       return `url(${svgUri(svg)}) center / 100% 100% no-repeat, ${dk(c2, .9)}`;
     }
     case 'crust': {
-      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 150' preserveAspectRatio='none'><g fill='none' stroke='${c1}' stroke-linecap='round' stroke-linejoin='round'>${upTo(CRACKS, fxLevel(appliedTheme)).map(c => c.p).join('')}</g></svg>`;
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 150' preserveAspectRatio='none'><g fill='none' stroke='${c1}' stroke-linecap='round' stroke-linejoin='round'>${upTo(CRACKS, lv).map(c => c.p).join('')}</g></svg>`;
       return `url(${svgUri(svg)}) center / 100% 100% no-repeat, radial-gradient(circle at 50% 60%, ${mixHex(c2, '#000000', .8)}, ${mixHex(c2, '#000000', .93)})`;
     }
     // Estilos novos: imagens paradas (as mesmas das miniaturas), com tantos elementos quantos o nível de "Quantidade"
     case 'neon': {
-      const dk = (h, k) => mixHex(h, '#000000', k), lv = fxLevel(appliedTheme), A = c1, B = pal.a2;
-      const rr = card ? .55 : 1, rings = upTo(NEON_RINGS, lv).map(r => `radial-gradient(circle at ${card ? 88 : 50}% ${card ? 50 : 55}%, transparent 0 ${(r.r - 1.5) * rr}%, ${r.i % 2 ? B : A} ${r.r * rr}%, transparent ${(r.r + 3) * rr}%)`);
-      const lines = card ? [] : upTo(NEON_LINES, lv).map(n => `linear-gradient(transparent calc(${n.y}% - 1px), ${n.k ? B : A} calc(${n.y}% - 1px) calc(${n.y}% + 1px), transparent calc(${n.y}% + 1px))`);
-      return `${[...lines, ...rings].join(', ')}${lines.length || rings.length ? ', ' : ''}${dk(c2, .9)}`;
+      const dk = (h, k) => mixHex(h, '#000000', k), A = c1, B = pal.a2;
+      if (card) return `linear-gradient(90deg, transparent, ${A} 40%, ${B} 62%, transparent) 18px calc(100% - 12px) / calc(100% - 36px) 2px no-repeat, ${dk(c2, .9)}`;      // cartão parado: só a linha fina do rodapé
+      return `url(${svgUri(neonFloor(lv, false, A, B, dk(c2, .9)))}) center / 100% 100% no-repeat, ${dk(c2, .9)}`;       // capa e miniaturas: o mesmo sol e chão em grelha, parados
     }
     case 'clouds': {      // nuvens desenhadas nítidas (círculos e base arredondada, uma só transparência para o conjunto)
-      const dk = (h, k) => mixHex(h, '#000000', k), lv = fxLevel(appliedTheme);
+      const dk = (h, k) => mixHex(h, '#000000', k);
       const cl = upTo(CLOUDS, lv).map((c, i) => { const w = c.w / 1.95 * (small ? 1.25 : 1), h = c.h / 1.95 * (small ? 1.25 : 1), x = c.cx * 2 - w / 2, y = ((card ? (i % 2 ? 108 : -6) : c.top) + c.h / 2) / 1.5 - h / 2;
         return `<g fill='#ffffff' opacity='${card ? .13 : .3}'><rect x='${x.toFixed(1)}' y='${y.toFixed(1)}' width='${w.toFixed(1)}' height='${h.toFixed(1)}' rx='${(h / 2).toFixed(1)}'/><circle cx='${(x + w * .36).toFixed(1)}' cy='${(y + h * .1).toFixed(1)}' r='${(h * .62).toFixed(1)}'/><circle cx='${(x + w * .62).toFixed(1)}' cy='${(y + h * .2).toFixed(1)}' r='${(h * .5).toFixed(1)}'/></g>`; }).join('');
       const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' preserveAspectRatio='xMidYMid slice'>${cl}</svg>`;
       return `url(${svgUri(svg)}) center / 100% 100% no-repeat, linear-gradient(180deg, ${dk(c2, .55)} 0%, ${dk(mixHex(c1, c2, .5), .25)} 100%)`;
     }
     case 'rain': {
-      const dk = (h, k) => mixHex(h, '#000000', k), lv = fxLevel(appliedTheme), gap = [38, 29, 22, 17, 13][lv - 1];
+      const dk = (h, k) => mixHex(h, '#000000', k), gap = [38, 29, 22, 17, 13][lv - 1];
       return `repeating-linear-gradient(78deg, transparent 0 ${gap}px, rgba(255,255,255,.38) ${gap}px ${gap + 1}px), repeating-linear-gradient(74deg, transparent 0 ${gap * 1.7}px, rgba(${hexRgb(c1).join(',')},.5) ${gap * 1.7}px ${gap * 1.7 + 1.5}px), linear-gradient(180deg, ${dk(c2, .88)} 0%, ${dk(c2, .62)} 100%)`;
     }
     case 'marble': {
-      const lv = fxLevel(appliedTheme);
       const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 150' preserveAspectRatio='none'><g fill='none' stroke='${c1}' stroke-linecap='round'>${upTo(MARBLE, lv).map(v => `<path stroke-width='${v.w}' d='${v.d}'/>`).join('')}</g></svg>`;
       return `url(${svgUri(svg)}) center / 100% 100% no-repeat, ${mixHex(c2, '#000000', .8)}`;
     }
     case 'paper': {
-      const dk = (h, k) => mixHex(h, '#000000', k), lv = fxLevel(appliedTheme), b = mixHex(c1, c2, .5);
+      const dk = (h, k) => mixHex(h, '#000000', k), b = mixHex(c1, c2, .5);
       const sh = upTo(SHEENS, lv).map(s => `linear-gradient(105deg, transparent ${s.x - 4}%, rgba(255,255,255,.16) ${s.x}%, transparent ${s.x + 7}%)`);
       return `${sh.join(', ')}${sh.length ? ', ' : ''}linear-gradient(40deg, transparent 0 38%, rgba(0,0,0,.18) 38% 39%, transparent 39% 64%, rgba(255,255,255,.1) 64% 65%, transparent 65%), linear-gradient(115deg, ${dk(b, .5)} 0 28%, ${dk(b, .38)} 28% 50%, ${dk(b, .62)} 50% 71%, ${dk(b, .5)} 71%)`;
     }
@@ -433,14 +486,14 @@ function applyTheme(t, opts = {}) {
     for (const [k, v] of Object.entries(fluidVars(pal))) r.style.setProperty(k, v);
     // Cartões de total: por defeito só a cor (gradiente). Com "Cartões seguem o estilo" ligado usam o estilo escolhido:
     // os de magma/ondas ganham o fundo escuro com o movimento, e os outros o padrão (píxeis, pontos…) em imagem.
-    const fl = FOOT_KINDS.includes(t.style) ? undefined : FLUID_CODE[t.style], cs = !!t.cardStyle;     // fl: só os estilos que escurecem o cartão
+    const fl = FLUID_CODE[t.style], cs = !!t.cardStyle;     // fl: os estilos que escurecem o cartão (Barras e Linha incluídas: o cartão leva o mesmo fundo escuro da capa)
     // Regra dos cartões: por defeito, gradiente (parado, ou a rodar se as animações estiverem ligadas). Seguindo o estilo: animado se as animações
     // estiverem ligadas; senão, a imagem parada do estilo (um pouco escurecida nos de magma/ondas para o texto branco se ler em qualquer paleta).
     // Cartões de total (gradiente por defeito): um ponto claro numa ponta e um tom mais fundo na outra, para o relevo se notar tanto no tema claro como no escuro.
     const hi = mixHex(mixHex(pal.g[0], pal.g[1], .18), '#ffffff', .1), lo = mixHex(mixHex(pal.g[0], pal.g[1], .82), '#000000', .12);
     r.style.setProperty('--bt-grad', `linear-gradient(135deg, ${hi} 0%, ${pal.g[0]} 34%, ${pal.g[1]} 68%, ${lo} 100%)`);
-    r.style.setProperty('--bt-bg', !cs || FOOT_KINDS.includes(t.style) ? 'var(--bt-grad)'
-      : fl ? (fluidMotion(t) ? `var(--${fl}-card)` : 'linear-gradient(100deg, rgba(0, 0, 0, .34) 0%, rgba(0, 0, 0, .12) 50%, rgba(0, 0, 0, 0) 85%), radial-gradient(ellipse at 80% -10%, rgba(255, 255, 255, .18), rgba(255, 255, 255, 0) 58%), var(--grad-card)')
+    r.style.setProperty('--bt-bg', !cs ? 'var(--bt-grad)'
+      : fl ? (FOOT_KINDS.includes(t.style) ? 'var(--bs-card)' : fluidMotion(t) ? `var(--${fl}-card)` : 'linear-gradient(100deg, rgba(0, 0, 0, .34) 0%, rgba(0, 0, 0, .12) 50%, rgba(0, 0, 0, 0) 85%), radial-gradient(ellipse at 80% -10%, rgba(255, 255, 255, .18), rgba(255, 255, 255, 0) 58%), var(--grad-card)')
       : classicCardMotion(t) ? 'linear-gradient(135deg, var(--c1) 0%, var(--c2) 100%)' : t.style === 'pixel' ? 'linear-gradient(100deg, color-mix(in srgb, var(--c1) 50%, var(--c2)) 0%, color-mix(in srgb, var(--c1) 50%, var(--c2)) 36%, transparent 80%), var(--grad-style)' : t.style === 'conic' ? 'var(--grad-card)' : 'var(--grad-style)');       // Píxeis, Aurora, Quadrículas, Cónico: base lisa + camada que se mexe
     if (cs && fl) r.style.setProperty('--on-grad-g', '#ffffff');                       // fundo escuro: texto claro
     else if (cs && t.style === 'solid') r.style.setProperty('--on-grad-g', baseL > 0.42 ? '#04130d' : '#ffffff');
@@ -475,7 +528,7 @@ function applyTheme(t, opts = {}) {
 const MODULES = [
   { id: 'subs',  icon: 'subs',  name: 'Subscrições',        short: 'Subscrições', desc: 'Streaming, apps, serviços recorrentes', ready: true },
   { id: 'spend', icon: 'spend', name: 'Gastos do dia a dia', short: 'Gastos',      desc: 'Para gastos diários', ready: true },
-  { id: 'fuel',  icon: 'fuel',  name: 'Combustível', short: 'Combustível', desc: 'Litros, quilómetros, consumo e tendência do preço', ready: true },
+  { id: 'fuel',  icon: 'car',   name: 'Automóvel', short: 'Automóvel', desc: 'Combustível, outras despesas, lembretes e custo por km', ready: true },
   { id: 'vices', icon: 'vices', name: 'Vícios', short: 'Vícios', desc: 'Sem julgamentos: Todos temos algum…', ready: true },
   { id: 'house', icon: 'home',  name: 'Casa', short: 'Casa',    desc: 'Renda, luz, água, internet… com faturas reais', ready: true },
 ];
@@ -489,12 +542,13 @@ const CATS = [
   { id: 'food',      icon: 'food',      name: 'Comida',      color: '#10b981' },
   { id: 'transport', icon: 'transport', name: 'Transportes', color: '#8b5cf6' },
   { id: 'casino',    icon: 'dice',      name: 'Casino',      color: '#06b6d4' },   // só no resumo: o casino aparece sempre numa linha própria
+  { id: 'shop',      icon: 'car',       name: 'Automóvel', color: '#f97316' },
   { id: 'other',     icon: 'other',     name: 'Outros',      color: '#8b93a3' },
 ];
 const catOf = id => CATS.find(c => c.id === id) || CATS[CATS.length - 1];
 /* Categorias que vão ter separador próprio: já não se oferecem nos Gastos do dia a dia,
    mas os registos antigos com estas categorias continuam a aparecer e a poder editar-se. */
-const OWN_TAB = ['vices', 'home', 'casino'];
+const OWN_TAB = ['vices', 'home', 'casino', 'shop'];
 
 /* Ícones SVG (iguais em todos os dispositivos, ao contrário dos emojis). */
 const ICONS = {
@@ -546,6 +600,7 @@ const ICONS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   logout: '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><path d="M16 8l4 4-4 4M20 12H9"/>',
+  wrench: '<path d="M7 10h3V7L6.5 3.5a6 6 0 0 1 8 8l6 6a2 2 0 0 1-3 3l-6-6a6 6 0 0 1-8-8L7 10z"/>',
   car: '<path d="M5 16l1.5-5.5A2 2 0 0 1 8.4 9h7.2a2 2 0 0 1 1.9 1.5L19 16"/><rect x="3" y="16" width="18" height="4" rx="1.5"/><circle cx="7.5" cy="18" r=".8"/><circle cx="16.5" cy="18" r=".8"/>',
   moto: '<circle cx="6" cy="16" r="3"/><circle cx="18" cy="16" r="3"/><path d="M6 16l4-6h5l3 6M10 10L9 7H7"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
@@ -780,9 +835,9 @@ function billInfo(p, b) {
   const typical = b.variable && last3.length ? (stable ? last.v : last3.reduce((a, r) => a + r.v, 0) / last3.length) : curAmount(b);   // sem faturas, conta a estimativa
   return { reals, typical, monthly: typical / everyOf(b), last, diff: last && prev ? last.v - prev.v : null };
 }
-function pendingInvoices(p) {                                // faturas variáveis já vencidas e ainda sem valor real
+function pendingInvoices(p, items = p.bills) {               // faturas variáveis já vencidas e ainda sem valor real (contas de casa, ou pagamentos fixos do automóvel)
   const t = today0(), out = [];
-  for (const b of p.bills) if (b.variable) {
+  for (const b of items) if (b.variable) {
     for (let k = 0; k < 14; k++) {
       const dt = new Date(t.getFullYear(), t.getMonth() - k, 1), y = dt.getFullYear(), m = dt.getMonth();
       if (y * 12 + m < startIndex(b) || !isChargeMonth(b, m)) continue;
@@ -814,7 +869,7 @@ function nextCharge(s, from) {                               // primeira cobran�
 }
 function dueReminders(p) {
   const now = today0();
-  return [...p.subs, ...p.bills].filter(s => s.remind).map(s => {      // subscrições e contas de casa têm os mesmos campos
+  return [...p.subs, ...p.bills, ...p.carFix].filter(s => s.remind).map(s => {      // subscrições e contas de casa têm os mesmos campos
     const next = nextCharge(s, now);
     return { sub: s, days: Math.round((next - now) / 864e5), amount: priceAt(s, ymOf(next)) };
   }).filter(r => r.days <= r.sub.remindDays).sort((a, b) => a.days - b.days);
@@ -826,7 +881,7 @@ const subEntry = s => ({ kind: 'sub', id: s.id, name: s.name, amount: curAmount(
 function firstMonthIndex(p) {
   const n = new Date();
   let min = n.getFullYear() * 12 + n.getMonth();
-  for (const s of [...p.subs, ...p.bills]) min = Math.min(min, startIndex(s));
+  for (const s of [...p.subs, ...p.bills, ...p.carFix]) min = Math.min(min, startIndex(s));
   for (const s of p.spends) min = Math.min(min, +s.date.slice(0, 4) * 12 + (+s.date.slice(5, 7) - 1));
   for (const k in p.hlog) { const d = k.slice(k.indexOf(':') + 1); min = Math.min(min, +d.slice(0, 4) * 12 + (+d.slice(5, 7) - 1)); }
   return min;
@@ -838,12 +893,17 @@ function entriesOn(p, y, m) {
   const pre = `${y}-${pad(m + 1)}-`;                       // comparação de texto: bem mais rápida com muitos dados
   for (const s of p.spends) {
     if (s.date.startsWith(pre))
-      out.push({ kind: 'spend', id: s.id, day: +s.date.slice(8), amount: s.amount, name: s.note || catOf(s.cat).name, cat: s.cat, spend: s });
+      out.push({ kind: 'spend', id: s.id, day: +s.date.slice(8), amount: s.amount, name: s.note || (s.cat === 'shop' ? shopTypeOf(s.type).name : catOf(s.cat).name), cat: s.cat, spend: s });      // despesa do automóvel sem nota: o tipo (Óleo e filtros, Pneus…)
   }
   for (const b of p.bills) {                                 // casa: o que conta é a fatura real; sem ela, a estimativa
     if (y * 12 + m < startIndex(b) || !isChargeMonth(b, m)) continue;
     const ym = `${y}-${pad(m + 1)}`, real = p.billLog[`${b.id}:${ym}`];
     out.push({ kind: 'bill', id: `${b.id}:${ym}`, day: Math.min(b.day, dim(y, m)), amount: real ?? priceAt(b, ym), estimated: b.variable && real === undefined, name: b.name, cat: 'home', bill: b });
+  }
+  for (const c of p.carFix) {                                // automóvel: pagamentos fixos (seguro, IUC…)
+    if (y * 12 + m < startIndex(c) || !isChargeMonth(c, m)) continue;
+    const ym = `${y}-${pad(m + 1)}`, real = p.billLog[`${c.id}:${ym}`];             // variável: o valor real do mês; sem ele, a estimativa
+    out.push({ kind: 'carfix', id: `${c.id}:${ym}`, day: Math.min(c.day, dim(y, m)), amount: real ?? priceAt(c, ym), estimated: c.variable && real === undefined, name: c.name, cat: 'shop', carfix: c });
   }
   for (const h of p.habits) {                                // hábitos: só os que o utilizador quer ver no calendário e no resumo
     if (!h.show) continue;
@@ -1045,32 +1105,38 @@ function vForm() {
 }
 
 /* Perfil + navegação */
+function navIcons() {                                   // os ícones da barra de baixo (e do "Mais")
+  return {
+    home: `<svg viewBox="0 0 24 24">${ICONS.calendar}</svg>`,
+    subs: '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>',
+    spend: '<svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h11v4"/><path d="M4 7v10a2 2 0 0 0 2 2h13a1 1 0 0 0 1-1V10a1 1 0 0 0-1-1H6a2 2 0 0 1-2-2z"/><circle cx="16" cy="14" r="1.2"/></svg>',
+    fuel: `<svg viewBox="0 0 24 24">${ICONS.car}</svg>`,
+    vices: `<svg viewBox="0 0 24 24">${ICONS[viceIcon()]}</svg>`,
+    house: `<svg viewBox="0 0 24 24">${ICONS.home}</svg>`,
+    manage: `<svg viewBox="0 0 24 24">${ICONS.gear}</svg>`,
+    more: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg>',
+  };
+}
 function vProfile() {
   const p = current();
   const mods = MODULES.filter(m => m.ready && p.modules.includes(m.id));
   const navItem = (id, label, svg) => `<button class="${ui.tab === id ? 'on' : ''}" data-act="tab" data-tab="${id}"${id === 'vices' ? ` data-ic="${viceIcon()}"` : ''}>${svg}${label}</button>`;
-  const icons = {
-    home: `<svg viewBox="0 0 24 24">${ICONS.calendar}</svg>`,
-    subs: '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>',
-    spend: '<svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h11v4"/><path d="M4 7v10a2 2 0 0 0 2 2h13a1 1 0 0 0 1-1V10a1 1 0 0 0-1-1H6a2 2 0 0 1-2-2z"/><circle cx="16" cy="14" r="1.2"/></svg>',
-    fuel: `<svg viewBox="0 0 24 24">${ICONS.fuel}</svg>`,
-    vices: `<svg viewBox="0 0 24 24">${ICONS[viceIcon()]}</svg>`,
-    house: `<svg viewBox="0 0 24 24">${ICONS.home}</svg>`,
-    manage: `<svg viewBox="0 0 24 24">${ICONS.gear}</svg>`,
-  };
-  const body = ui.tab === 'subs' ? vSubs(p) : ui.tab === 'spend' ? vSpend(p) : ui.tab === 'fuel' ? vFuel(p) : ui.tab === 'vices' ? vHabits(p) : ui.tab === 'house' ? vHouse(p) : ui.tab === 'manage' ? vManage(p) : vHome(p);
+  const icons = navIcons();
+  const body = ui.tab === 'subs' ? vSubs(p) : ui.tab === 'spend' ? vSpend(p) : ui.tab === 'fuel' ? vCar(p) : ui.tab === 'vices' ? vHabits(p) : ui.tab === 'house' ? vHouse(p) : ui.tab === 'manage' ? vManage(p) : vHome(p);
   const plus = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
   let fab = '';
   if (ui.tab === 'subs') fab = `<button class="fab" data-act="add-sub" aria-label="Adicionar subscrição">${plus}</button>`;
-  else if (ui.tab === 'fuel') fab = `<button class="fab" data-act="add-fuel" aria-label="Novo abastecimento">${plus}</button>`;
+  else if (ui.tab === 'fuel') fab = ui.carTab === 'shop' ? `<button class="fab" data-act="add-shop" aria-label="Nova despesa do automóvel">${plus}</button>` : `<button class="fab" data-act="add-fuel" aria-label="Novo abastecimento">${plus}</button>`;
   else if (ui.tab === 'vices') fab = `<button class="fab" data-act="add-habit" aria-label="Novo hábito">${plus}</button>`;
   else if (ui.tab === 'house') fab = `<button class="fab" data-act="add-bill" aria-label="Nova conta de casa">${plus}</button>`;
   else if (ui.tab === 'spend' && p.modules.includes('spend'))
     fab = `<button class="fab" data-act="add-spend" aria-label="Registar gasto">${plus}</button>`;
+  const shown = mods.length > 3 ? mods.slice(0, 2) : mods, hidden = mods.length > 3 ? mods.slice(2) : [];     // com mais de 3 módulos, os outros ficam em "Mais"
   return `${body}${fab}
-    <nav class="nav ${mods.length >= 4 ? 'dense' : ''}">
+    <nav class="nav">
       ${navItem('home', 'Início', icons.home)}
-      ${mods.map(m => navItem(m.id, m.short, icons[m.id])).join('')}
+      ${shown.map(m => navItem(m.id, m.short, icons[m.id])).join('')}
+      ${hidden.length ? `<button class="${hidden.some(m => m.id === ui.tab) ? 'on' : ''}" data-act="more-nav" data-tab="more">${icons.more}Mais</button>` : ''}
       ${navItem('manage', 'Definições', icons.manage)}
     </nav>`;
 }
@@ -1078,7 +1144,8 @@ function vProfile() {
 /* Início: perfil, resumo por período, lembretes, calendário */
 function vHome(p) {
   const rem = dueReminders(p).map(r => `
-    <div class="reminder">${ico('bell')} <span><b>${esc(r.sub.name)}</b> cobra ${whenText(r.days)} · ${cost(r.amount)}</span></div>`).join('');
+    <div class="reminder">${ico('bell')} <span><b>${esc(r.sub.name)}</b> cobra ${whenText(r.days)} · ${cost(r.amount)}</span></div>`).join('')
+    + carDueReminders(p).map(c => `<div class="reminder">${ico('wrench')} <span><b>${esc(c.name)}</b> do automóvel: ${c.text}</span></div>`).join('');
   const n = entriesBetween(p, ...periodRange('month')).length;
   const nudge = needsBackup(p) ? `<button class="reminder nudge" data-act="export-backup">${ico('download')} <span>Já passaram 2 semanas sem cópia de segurança. <b>Exportar agora</b></span></button>` : '';
   return `<section class="screen">
@@ -1103,7 +1170,7 @@ function summaryHTML(p) {
   const cas = casinoNet(p, ymd(from), ymd(to));                         // casino: saldo do período (ganho ou perda)
   const list = entriesBetween(p, from, to).filter(e => !isCasinoEntry(e));
   const total = list.reduce((a, e) => a + e.amount, 0) + cas.loss;
-  const by = {}; list.forEach(e => by[e.cat] = (by[e.cat] || 0) + e.amount);
+  const by = {}; list.forEach(e => { const k = e.cat === 'fuel' ? 'shop' : e.cat; by[k] = (by[k] || 0) + e.amount; });      // o combustível conta como Automóvel, a "pasta" principal
   if (cas.loss > 0) by.casino = cas.loss;
   const rows = Object.entries(by).sort((a, b) => b[1] - a[1]);
   const bar = rows.length ? `<div class="stackbar">${rows.map(([c, v]) => `<i style="width:${v / total * 100}%;background:${catOf(c).color}"></i>`).join('')}</div>` : '';
@@ -1118,7 +1185,7 @@ function summaryHTML(p) {
     year: new Date(t.getFullYear(), 11, 31) }[ui.period];
   const coming = periodEnd && tomorrow <= periodEnd ? entriesBetween(p, tomorrow, periodEnd).reduce((a, e) => a + e.amount, 0) : 0;
   // "próxima" começa amanhã: o que cobra hoje já está contado nos gastos
-  const nxt = [...p.subs, ...p.bills].map(s => ({ s, d: nextCharge(s, tomorrow) })).sort((a, b) => a.d - b.d)[0];
+  const nxt = [...p.subs, ...p.bills, ...p.carFix].map(s => ({ s, d: nextCharge(s, tomorrow) })).sort((a, b) => a.d - b.d)[0];
   const label = PERIODS.find(x => x[0] === ui.period)[2];
 
   return `<div class="card summary">
@@ -1159,7 +1226,17 @@ function refreshVSummary(p, dir) {                  // dir: +1 / -1 = mudou de p
   const prev = Number(box.querySelector('.big-total b')?.dataset.v) || 0;
   const oldSeg = box.querySelector('.seg'), ox = oldSeg?.style.getPropertyValue('--sx'), ow = oldSeg?.style.getPropertyValue('--sw');
   box.classList.remove('slide-r', 'slide-l', 'edge-l', 'edge-r');
-  box.innerHTML = vSummaryHTML(p);
+  /* O cartão grande fica no mesmo sítio: só se troca o conteúdo. Assim as camadas do estilo (medusas, algas, barras…) não são apagadas
+     nem recriadas, e a animação continua sem voltar ao início ao mudar de período. */
+  const bt = box.querySelector('.big-total'), keep = bt ? [...bt.querySelectorAll(':scope > .cv-card, :scope > .cv-drift')] : [];
+  const tpl = document.createElement('template'); tpl.innerHTML = vSummaryHTML(p);
+  const nbt = tpl.content.querySelector('.big-total');
+  if (bt && nbt && keep.length) {
+    [...bt.children].forEach(c => { if (!keep.includes(c)) c.remove(); });
+    bt.append(...nbt.childNodes); nbt.remove();
+    [...box.children].forEach(c => { if (c !== bt) c.remove(); });
+    box.append(tpl.content);
+  } else box.innerHTML = vSummaryHTML(p);
   const seg = box.querySelector('.seg');
   if (seg && ox) { seg.style.setProperty('--sx', ox); seg.style.setProperty('--sw', ow); seg.classList.add('ready'); void seg.offsetWidth; }
   if (dir) { void box.offsetWidth; box.classList.add(dir > 0 ? 'slide-r' : 'slide-l'); }
@@ -1244,7 +1321,7 @@ function vCalendar(p) {
   let cells = DOW.map(d => `<div class="dow">${d}</div>`).join('') + '<div class="day empty"></div>'.repeat(first);
   for (let d = 1; d <= dim(y, m); d++) {
     const isToday = now.getFullYear() === y && now.getMonth() === m && now.getDate() === d;
-    const cats = [...new Set((byDay[d] || []).map(e => e.cat))].slice(0, 3);
+    const cats = [...new Set((byDay[d] || []).map(e => e.cat === 'fuel' ? 'shop' : e.cat))].slice(0, 3);
     const dots = cats.map(c => `<i class="dot" style="background:${catOf(c).color}"></i>`).join('');
     cells += `<button class="day ${isToday ? 'today' : ''} ${ui.cal.sel === d ? 'sel' : ''} ${calPop === d ? 'pop' : ''}" data-act="sel-day" data-d="${d}">${d}<span class="dots">${dots}</span></button>`;
   }
@@ -1264,7 +1341,8 @@ function vCalendar(p) {
     }
     const inYear = spendOf(p, yearGroups.flatMap(g => g.list), `${y}-01-01`, dstr(upTo));
     const monthSpend = g => spendOf(p, g.list, `${y}-${pad(g.mm + 1)}-01`, g.mm < m ? `${y}-${pad(g.mm + 1)}-${pad(dim(y, g.mm))}` : dstr(upTo));
-    const hline = e => `<div class="hline"><i style="background:${catOf(e.cat).color}"></i><span class="d">${e.day}</span><span class="n">${esc(e.name)}</span><b class="${e.gain > 0 ? 'pos' : ''}">${amtText(e)}</b></div>`;
+    const srcOf = e => e.kind === 'sub' ? 'Subscrições' : e.kind === 'bill' ? 'Casa' : e.kind === 'carfix' || e.cat === 'fuel' || e.cat === 'shop' ? 'Automóvel' : e.kind === 'habit' ? 'Vícios' : 'Gastos';      // de que separador vem cada linha
+    const hline = e => `<div class="hline"><i style="background:${catOf(e.cat === 'fuel' ? 'shop' : e.cat).color}"></i><span class="d">${e.day}</span><span class="n"><span class="nm">${esc(e.name)}</span><small class="src">${srcOf(e)}</small></span><b class="${e.gain > 0 ? 'pos' : ''}">${amtText(e)}</b></div>`;
     const openM = ui.cal.open === 'month', openY = ui.cal.open === 'year';
     summary = `<button class="total hist-toggle" data-act="toggle-hist" data-v="month" aria-expanded="${openM}">
         <span>Gastos em ${MESES[m]} até dia ${upTo} ${ico('down', openM ? 'flip' : '')}</span><span class="neg">${cost(inMonth)}</span></button>
@@ -1300,10 +1378,11 @@ function vCalendar(p) {
 /* Linha de um lançamento (subscrição ou gasto avulso) */
 function entryHTML(e, extra) {
   const c = catOf(e.cat);
-  const isSub = e.kind === 'sub', isHabit = e.kind === 'habit', isBill = e.kind === 'bill';
+  const isSub = e.kind === 'sub', isHabit = e.kind === 'habit', isBill = e.kind === 'bill', isCar = e.kind === 'carfix';
   const bt = isBill ? billTypeOf(e.bill.type) : null;
   const ic = isSub ? subIc(e.sub, e.name)
            : isBill ? `<div class="ic" style="background:${bt.color}">${ico(bt.icon)}</div>`
+           : isCar ? `<div class="ic" style="background:${carFixTypeOf(e.carfix.type).color}">${ico(carFixTypeOf(e.carfix.type).icon)}</div>`
            : isHabit ? `<div class="ic" style="background:${e.habit.color}">${ico(e.habit.icon)}</div>`
                      : `<div class="ic" style="background:${c.color}">${ico(c.icon)}</div>`;
   const sp = e.spend, PR = current();
@@ -1316,11 +1395,11 @@ function entryHTML(e, extra) {
     e.habit.tpl === 'casino' && e.rec.spent > 0 ? `depositou ${nf(e.rec.spent)} €` : '',
     e.rec.won > 0 ? (games ? `reembolso ${nf(e.rec.won)} €` : `ganhou ${nf(e.rec.won)} €`) : '',
   ].filter(Boolean).join(' · ') : '';
-  const billInfoTxt = isBill ? (e.estimated ? 'estimativa' : e.bill.variable ? 'fatura real' : '') : '';
-  const subtitle = [isSub ? 'Subscrição' : isHabit ? 'Vícios' : isBill ? 'Casa' : c.name, fuelInfo, habitInfo, billInfoTxt, extra].filter(Boolean).join(' · ');
-  return `<button class="item" data-act="${isSub ? 'edit-sub' : isBill ? 'edit-bill-entry' : isHabit ? (games ? 'goto-habits' : 'edit-hday') : 'edit-spend'}" data-id="${e.id}">
+  const billInfoTxt = isBill ? (e.estimated ? 'estimativa' : e.bill.variable ? 'fatura real' : '') : isCar ? (e.estimated ? 'estimativa' : e.carfix.variable ? 'valor real' : '') : '';
+  const subtitle = [isSub ? 'Subscrição' : isHabit ? 'Vícios' : isBill ? 'Casa' : isCar ? 'Automóvel · ' + carFixTypeOf(e.carfix.type).name : c.name, fuelInfo, habitInfo, billInfoTxt, extra].filter(Boolean).join(' · ');
+  return `<button class="item" data-act="${isSub ? 'edit-sub' : isCar ? 'edit-carfix' : isBill ? 'edit-bill-entry' : isHabit ? (games ? 'goto-habits' : 'edit-hday') : 'edit-spend'}" data-id="${e.id}">
     ${ic}
-    <div class="grow"><b>${esc(e.name)}</b><span>${subtitle}${isSub && e.sub.remind ? ' · ' + ico('bell') : ''}</span></div>
+    <div class="grow"><b>${esc(e.name)}</b><span>${subtitle}${(isSub && e.sub.remind) || (isCar && e.carfix.remind) ? ' · ' + ico('bell') : ''}</span></div>
     <div class="amt ${e.gain > 0 ? 'pos' : 'neg'}">${amtText(e)}</div>
   </button>`;
 }
@@ -1358,8 +1437,7 @@ function vSubs(p) {
     <h1 class="page-title">Subscrições</h1>
     <div class="big-total" style="margin-top:16px">
       <span>Todos os meses</span><b>${cost(monthlyTotal)}</b>
-      ${others.length ? `<span class="bt-sub">Anuais e outras: ${cost(othersYear)}/ano</span>` : ''}
-      <span class="bt-sub">Total ≈ ${cost(monthlyTotal * 12 + othersYear)}/ano</span>
+      ${btStats([[cost(monthlyTotal * 12 + othersYear), 'por ano'], others.length ? [cost(othersYear), 'anuais e outras'] : null, [p.subs.length, p.subs.length === 1 ? 'subscrição' : 'subscrições']])}
     </div>
     ${p.subs.length ? '' : `<div class="card"><div class="empty-state"><div class="emoji">${ico('subs')}</div>Ainda não tens subscrições.<br>Toca em <b>+</b> para adicionar a primeira.</div></div>`}
     ${monthly.length ? `<div class="card"><div class="card-h"><h3>Todos os meses</h3><span class="muted small">${monthly.length}</span></div>
@@ -1378,11 +1456,11 @@ const VEHICLE_TYPES = [{ id: 'car', name: 'Carro', icon: 'car' }, { id: 'moto', 
 const vehTypeOf = id => VEHICLE_TYPES.find(t => t.id === id) || VEHICLE_TYPES[0];
 function fuelKmHint(vid, excludeId) {                        // "Último registo: 84 500 km" — os km são sempre de um veículo
   const k = Math.max(0, ...current().spends.filter(x => isFuel(x) && x.veh === vid && x.id !== excludeId).map(x => x.km));
-  return `${k ? `Último registo: ${nf(k, 0)} km. ` : ''}É com isto que a app calcula o consumo e o custo por km.`;
+  return `${k ? `Último registo: ${nf(k, 0)} km. ` : ''}Opcional: com os km, a app calcula o consumo e o custo por km.`;
 }
 
 function fuelStats(p, vid) {                                 // a análise é por veículo: o consumo de uma mota não se mistura com o de um carro
-  const list = p.spends.filter(s => isFuel(s) && s.veh === vid);
+  const list = p.spends.filter(s => s.cat === 'fuel' && s.liters > 0 && s.veh === vid);       // o preço por litro não precisa de km
   if (!list.length) return null;
   const price = s => s.amount / s.liters;
   const byDate = list.slice().sort((a, b) => a.date.localeCompare(b.date) || a.km - b.km);
@@ -1394,7 +1472,7 @@ function fuelStats(p, vid) {                                 // a análise é po
 
   /* Consumo pelo método "depósito cheio → depósito cheio": os litros de todos os
      abastecimentos desde o último cheio, divididos pelos km desde esse cheio. */
-  const byKm = list.slice().sort((a, b) => a.km - b.km || a.date.localeCompare(b.date));
+  const byKm = list.filter(s => s.km > 0).sort((a, b) => a.km - b.km || a.date.localeCompare(b.date));       // o consumo só usa os que têm km
   let lastFull = null, liters = 0, cost = 0, totL = 0, totC = 0, totD = 0, lastL100 = null;
   for (const s of byKm) {
     if (lastFull !== null) { liters += s.liters; cost += s.amount; }
@@ -1410,7 +1488,7 @@ function fuelStats(p, vid) {                                 // a análise é po
     n: list.length, series, last, prev, avg, lastL100,
     l100: totD ? totL / totD * 100 : null,
     costKm: totD ? totC / totD : null,
-    range: byKm[byKm.length - 1].km - byKm[0].km,
+    range: byKm.length ? byKm[byKm.length - 1].km - byKm[0].km : 0,
   };
 }
 
@@ -1451,16 +1529,286 @@ function fuelCard(p, v) {
   </div>`;
 }
 
-/* Separador Combustível: análise, abastecimentos detalhados e registos simples por completar */
-function vFuel(p) {
+/* ── Oficina (dentro do separador Carro): despesas do carro, lembretes por km ou por data e o custo real por km ──
+ * As despesas são gastos normais (p.spends) com cat 'shop', tipo (type), km (opcional), local (place) e veículo (veh): entram no calendário e nos totais.
+ * Os lembretes (p.shopRems) contam a partir do último registo do mesmo tipo e do mesmo veículo. */
+const SHOP_ALL = [
+  { id: 'service',    name: 'Revisão',        icon: 'wrench',    color: '#f97316', km: 15000, months: 12 },
+  { id: 'oil',        name: 'Óleo e filtros', icon: 'drop',      color: '#f59e0b', km: 15000, months: 12 },
+  { id: 'tires',      name: 'Pneus',          icon: 'car',       color: '#64748b', km: 40000, months: 0 },
+  { id: 'brakes',     name: 'Travões',        icon: 'warn',      color: '#ef4444', km: 30000, months: 0 },
+  { id: 'battery',    name: 'Bateria',        icon: 'bolt',      color: '#eab308', km: 0, months: 48 },
+  { id: 'repair',     name: 'Reparação',      icon: 'wrench',    color: '#8b5cf6' },
+  { id: 'inspection', name: 'Inspeção',       icon: 'shield',    color: '#10b981', km: 0, months: 12 },
+  { id: 'insurance',  name: 'Seguro',         icon: 'shield',    color: '#0ea5e9', km: 0, months: 12 },
+  { id: 'tax',        name: 'IUC',            icon: 'building',  color: '#14b8a6', km: 0, months: 12 },
+  { id: 'wash',       name: 'Lavagem',        icon: 'drop',      color: '#06b6d4' },
+  { id: 'toll',       name: 'Portagens',      icon: 'transport', color: '#6366f1' },
+  { id: 'parking',    name: 'Estacionamento', icon: 'car',       color: '#0ea5e9' },
+  { id: 'fine',       name: 'Multas',         icon: 'warn',      color: '#f43f5e' },
+  { id: 'parts',      name: 'Acessórios',     icon: 'cart',      color: '#a855f7' },
+  { id: 'other',      name: 'Outros',         icon: 'other',     color: '#8b93a3' },
+];
+/* Seguro e IUC repetem-se: passam para os Pagamentos fixos. Continuam em SHOP_ALL só para os registos antigos se verem bem. */
+const SHOP_TYPES = SHOP_ALL.filter(t => t.id !== 'insurance' && t.id !== 'tax');
+const KM_TYPES = ['service', 'oil', 'tires', 'brakes', 'repair'];       // só nestes faz sentido pedir os km
+const REM_DEFAULTS = ['oil', 'service', 'tires', 'inspection'];
+const CAR_FIX_TYPES = [
+  { id: 'insurance', name: 'Seguro', icon: 'shield',   color: '#0ea5e9', period: 'year', hint: 'Seguradora' },
+  { id: 'tax',       name: 'IUC',    icon: 'building', color: '#14b8a6', period: 'year', hint: 'Imposto de circulação' },
+  { id: 'leasing',   name: 'Leasing', icon: 'car',     color: '#8b5cf6', period: 'month', hint: 'Banco ou marca' },
+  { id: 'other',     name: 'Outro',  icon: 'other',    color: '#8b93a3', period: 'month', hint: 'Garagem, Via Verde…' },
+];
+const carFixTypeOf = id => CAR_FIX_TYPES.find(t => t.id === id) || CAR_FIX_TYPES[CAR_FIX_TYPES.length - 1];      // os lembretes sugeridos quando ainda não há nenhum
+const shopTypeOf = id => SHOP_ALL.find(t => t.id === id) || SHOP_ALL[SHOP_ALL.length - 1];
+const isShop = s => s.cat === 'shop';
+const carKm = (p, vid) => Math.max(0, ...p.spends.filter(s => s.veh === vid && s.km > 0).map(s => s.km));      // o último valor real dos km do veículo (combustível ou outras despesas)
+function carKmNow(p, vid) {                                    // os km de hoje: o último valor real, mais o que o carro terá feito desde então (pela tua média por dia, ou pelos "km por ano" do veículo)
+  const pts = p.spends.filter(s => s.veh === vid && s.km > 0).sort((a, b) => a.date.localeCompare(b.date) || a.km - b.km);
+  if (!pts.length) return { km: 0, est: false };
+  const last = pts[pts.length - 1];
+  let perDay = null;
+  if (pts.length >= 2) { const d = (parseYmd(last.date) - parseYmd(pts[0].date)) / DAY; if (d >= 14 && last.km > pts[0].km) perDay = (last.km - pts[0].km) / d; }
+  if (perDay === null) { const v = p.vehicles.find(x => x.id === vid); if (v?.kmYear > 0) perDay = v.kmYear / 365; }
+  const days = Math.round((today0() - parseYmd(last.date)) / DAY);
+  return perDay && days > 0 ? { km: Math.round(last.km + perDay * days), est: true } : { km: last.km, est: false };
+}
+
+function shopKmHint(vid) {
+  const P = current(), k = carKm(P, vid), kn = carKmNow(P, vid);
+  return `${k ? `Último registo: ${nf(k, 0)} km${kn.est ? ` (agora ≈ ${nf(Math.round(kn.km / 50) * 50, 0)} km, estimado)` : ''}. ` : ''}Os km são opcionais: servem para os lembretes e para o custo real por km.`;
+}
+function remStatus(p, r) {                                    // estado de um lembrete: ok, perto (soon), atrasado (late) ou sem registo (none)
+  const veh = r.veh && p.vehicles.some(x => x.id === r.veh) ? r.veh : p.vehicles[0]?.id;
+  const last = p.spends.filter(s => isShop(s) && s.type === r.type && (!veh || s.veh === veh)).sort((a, b) => b.date.localeCompare(a.date) || (b.km || 0) - (a.km || 0))[0];
+  if (!last) return { level: 'none', text: 'Sem registo ainda. Regista a última vez.', frac: 0 };
+  const kn = veh ? carKmNow(p, veh) : { km: 0, est: false }, km = kn.km, parts = [], fr = [];
+  const kmTxt = n => kn.est ? '≈ ' + nf(Math.round(n / 50) * 50, 0) : nf(n, 0);              // com km estimados, o valor é arredondado e leva ≈
+  let level = 'ok';
+  if (r.everyKm > 0 && last.km > 0) {
+    const left = last.km + r.everyKm - km; fr.push(1 - left / r.everyKm);
+    if (left < 0) { level = 'late'; parts.push(`atrasado ${kmTxt(-left)} km`); }
+    else { if (left <= r.everyKm * .1) level = 'soon'; parts.push(`faltam ${kmTxt(left)} km`); }
+  }
+  if (r.everyMonths > 0) {
+    const due = parseYmd(last.date); due.setMonth(due.getMonth() + r.everyMonths);
+    const days = Math.round((due - today0()) / DAY); fr.push(1 - days / (r.everyMonths * 30.4));
+    if (days < 0) { level = 'late'; parts.push(`atrasado ${-days} dia${-days === 1 ? '' : 's'}`); }
+    else { if (days <= 30 && level === 'ok') level = 'soon'; parts.push(days === 0 ? 'é hoje' : `faltam ${days} dia${days === 1 ? '' : 's'}`); }
+  }
+  if (!parts.length) return { level: 'none', text: 'Define os km ou os meses do lembrete.', frac: 0 };
+  return { level, text: parts.join(' · '), frac: Math.max(0, Math.min(1, Math.max(...fr))) };
+}
+function carDueReminders(p) {                                 // os lembretes do carro que já estão perto ou atrasados, para o Início
+  if (!p.modules.includes('fuel')) return [];
+  return p.shopRems.map(r => ({ r, st: remStatus(p, r) })).filter(x => x.st.level === 'soon' || x.st.level === 'late').map(x => ({ name: shopTypeOf(x.r.type).name, text: x.st.text }));
+}
+function carCostPerKm(p, vid) {                               // combustível + oficina a dividir pelos km entre o primeiro e o último registo com km
+  const recs = p.spends.filter(s => s.veh === vid && s.km > 0 && (isShop(s) || isFuel(s))).sort((a, b) => a.km - b.km);
+  if (recs.length < 2) return null;
+  const dist = recs[recs.length - 1].km - recs[0].km; if (dist < 300) return null;
+  return (recs.reduce((a, s) => a + s.amount, 0) - (isFuel(recs[0]) ? recs[0].amount : 0)) / dist;       // o 1.º abastecimento paga km anteriores; uma despesa da oficina conta sempre
+}
+function shopRow(s) {
+  const tp = shopTypeOf(s.type), d = parseYmd(s.date), P = current();
+  const vn = P.vehicles.length > 1 && s.veh ? P.vehicles.find(v => v.id === s.veh)?.name : '';
+  const sub = [`${d.getDate()} ${MESES[d.getMonth()].slice(0, 3)}${d.getFullYear() !== today0().getFullYear() ? ' ' + d.getFullYear() : ''}`, s.km > 0 ? nf(s.km, 0) + ' km' : '', vn].filter(Boolean).join(' · ');
+  return `<button class="item" data-act="edit-shop" data-id="${s.id}"><div class="ic" style="background:${tp.color}">${ico(tp.icon)}</div>
+    <div class="grow"><b>${esc(tp.name)}${s.place ? ' · ' + esc(s.place) : ''}</b><span>${sub}</span></div><div class="amt neg">${cost(s.amount)}</div></button>`;
+}
+function carFixRow(c) {
+  const tp = carFixTypeOf(c.type), P = current();
+  const vn = P.vehicles.length > 1 && c.veh ? P.vehicles.find(v => v.id === c.veh)?.name : '';
+  return `<button class="item" data-act="edit-carfix" data-id="${c.id}"><div class="ic" style="background:${tp.color}">${ico(tp.icon)}</div>
+    <div class="grow"><b>${esc(c.name)}</b><span>${freqText(c)}${c.variable ? ' · variável' : ''}${c.remind ? ' · ' + ico('bell') : ''}${vn ? ' · ' + esc(vn) : ''}</span><div class="bill-trend">${subStatus(c)}</div></div>
+    <div class="amt neg">${c.variable ? '≈ ' : ''}${cost(billInfo(P, c).typical)}</div></button>`;
+}
+function carFixCard(p, v) {
+  const list = p.carFix.filter(c => !c.veh || !v || c.veh === v.id).sort((a, b) => nextCharge(a, today0()) - nextCharge(b, today0()));
+  const pend = pendingInvoices(p, list).slice(0, 4);                                  // pagamentos variáveis já vencidos e sem valor real
+  const pendHTML = pend.length ? `<div class="pend-box"><b>Por registar</b>${pend.map(x => { const tp = carFixTypeOf(x.b.type);
+    return `<button class="item" data-act="invoice" data-id="${x.b.id}:${x.ym}"><div class="ic" style="background:${tp.color}">${ico(tp.icon)}</div>
+      <div class="grow"><b>${esc(x.b.name)}</b><span>${MESES[+x.ym.slice(5) - 1]} · venceu a ${x.due.getDate()}</span></div><div class="amt muted">${nf(priceAt(x.b, x.ym))} € est.</div></button>`; }).join('')}
+    <p class="hint" style="margin:4px 0 10px">Toca para indicar o valor real. Até lá conta a estimativa.</p></div>` : '';
+  return `<div class="card"><div class="card-h"><h3>Pagamentos fixos</h3><button class="linkbtn accent" data-act="add-carfix">${ico('plus')} Adicionar</button></div>${pendHTML}${list.length
+    ? list.map(carFixRow).join('')
+    : `<p class="hint" style="margin:0 0 12px">O que pagas sempre à mesma data: seguro, IUC… Entra no calendário e podes ter um lembrete.</p>
+       <div class="chips">${CAR_FIX_TYPES.map(t => `<button type="button" class="chip" data-act="add-carfix" data-v="${t.id}" style="--c:${t.color}">${ico(t.icon)} ${t.name}</button>`).join('')}</div>`}</div>`;
+}
+function shopBody(p) {
+  const t = today0(), y = t.getFullYear(), mpre = `${y}-${pad(t.getMonth() + 1)}-`;
+  const v = p.vehicles.find(x => x.id === ui.fuelVeh) || p.vehicles[0];
+  if (v) ui.fuelVeh = v.id;
+  const list = p.spends.filter(s => isShop(s) && (!v || s.veh === v.id)).sort((a, b) => b.date.localeCompare(a.date) || (b.km || 0) - (a.km || 0));
+  const upto = ymd(t);
+  const fixed = (m0, m1) => { let a = 0;                                          // pagamentos fixos deste veículo já cobrados (até hoje) entre dois meses
+    for (let m = m0; m <= m1; m++) for (const e of entriesOn(p, y, m)) if (e.kind === 'carfix' && (!e.carfix.veh || !v || e.carfix.veh === v.id) && ymd(new Date(y, m, e.day)) <= upto) a += e.amount;
+    return a; };
+  const year = list.filter(s => s.date.startsWith(`${y}-`) && s.date <= upto).reduce((a, s) => a + s.amount, 0) + fixed(0, 11);
+  const month = list.filter(s => s.date.startsWith(mpre) && s.date <= upto).reduce((a, s) => a + s.amount, 0) + fixed(t.getMonth(), t.getMonth());
+  const cpk = v ? carCostPerKm(p, v.id) : null;
+  const lim = ui.shopLimit || 10;
+  const vehChips = p.vehicles.length > 1 ? `<div class="chips" style="margin:16px 0 0">${p.vehicles.map(x =>
+    `<button class="chip ${v && x.id === v.id ? 'on' : ''}" data-act="fuel-veh" data-v="${x.id}" style="--c:var(--accent)">${ico(vehTypeOf(x.type).icon)} ${esc(x.name)}</button>`).join('')}</div>` : '';
+  const rems = p.shopRems.filter(r => !r.veh || !v || r.veh === v.id);
+  const remRow = r => {
+    const tp = shopTypeOf(r.type), st = remStatus(p, r), col = st.level === 'late' ? 'var(--danger)' : st.level === 'soon' ? '#f59e0b' : st.level === 'ok' ? 'var(--good)' : 'var(--muted)';
+    return `<button class="item" data-act="edit-shoprem" data-id="${r.id}"><div class="ic" style="background:${tp.color}">${ico(tp.icon)}</div>
+      <div class="grow"><b>${esc(tp.name)}</b><span style="color:${col}">${st.text}</span><i class="rbar"><u style="width:${Math.round(st.frac * 100)}%;background:${col}"></u></i></div></button>`;
+  };
+  const noRems = `<p class="hint" style="margin:0 0 12px">Os lembretes avisam quando falta pouco, por km ou por data. Começa por um destes:</p>
+    <div class="chips">${REM_DEFAULTS.map(id => { const tp = shopTypeOf(id); return `<button type="button" class="chip" data-act="quick-rem" data-v="${id}" style="--c:${tp.color}">${ico(tp.icon)} ${tp.name}</button>`; }).join('')}</div>`;
+  const more = list.length > lim ? `<button class="more" data-act="more-shop">Ver mais (${list.length - lim})</button>` : '';
+  const fx = p.carFix.filter(c => !c.veh || !v || c.veh === v.id);                           // o mesmo formato da Casa: o que sai todos os meses, as outras frequências e o total por ano
+  const fxMonthly = fx.filter(c => everyOf(c) === 1).reduce((a, c) => a + billInfo(p, c).typical, 0);
+  const fxOthers = fx.filter(c => everyOf(c) > 1);
+  const fxOthersYear = fxOthers.reduce((a, c) => a + billInfo(p, c).typical * 12 / everyOf(c), 0);
+  return `<div class="big-total" style="margin-top:16px">
+      <span>Gasto em ${MESES[t.getMonth()]}</span><b>${cost(month)}</b>
+      ${btStats([[cost(fxMonthly), 'por mês'], [cost(year), 'este ano'], [cost(fxMonthly * 12 + fxOthersYear), 'por ano']])}
+      ${cpk ? `<span class="bt-sub">Custo real: ${nf(cpk, 3)} €/km (com combustível)</span>` : ''}
+    </div>
+    ${vehChips}
+    ${carFixCard(p, v)}
+    <div class="card"><div class="card-h"><h3>Lembretes</h3><button class="linkbtn accent" data-act="add-shoprem">${ico('plus')} Adicionar</button></div>${rems.length ? rems.map(remRow).join('') : noRems}</div>
+    ${list.length ? `<div class="card"><div class="card-h"><h3>Histórico</h3><span class="muted small">${list.length}</span></div>${list.slice(0, lim).map(shopRow).join('')}${more}</div>`
+      : `<div class="card"><div class="empty-state"><div class="emoji">${ico('wrench')}</div>Toca em <b>+</b> para registar outra despesa.</div></div>`}`;
+}
+/* Separador Carro: um seletor Combustível | Oficina. O + de baixo muda conforme o que está aberto. */
+function vCar(p) {
+  const tab = ui.carTab === 'shop' ? 'shop' : 'fuel';
+  return `<section class="screen">
+    <h1 class="page-title">Automóvel <button class="help-btn" data-act="car-help" aria-label="Como funciona o Automóvel">?</button></h1>
+    <div class="seg two" style="margin-top:14px"><button data-act="car-tab" data-v="fuel" class="${tab === 'fuel' ? 'on' : ''}">Combustível</button><button data-act="car-tab" data-v="shop" class="${tab === 'shop' ? 'on' : ''}">Outras despesas</button></div>
+    <div id="car-body" class="car-body">${tab === 'shop' ? shopBody(p) : fuelBody(p)}</div>
+  </section>`;
+}
+/* Mudar entre Combustível e Oficina: o seletor desliza e só o conteúdo de baixo muda, numa única transição (sai um pouco para um lado, entra do outro).
+   Não se redesenha o ecrã todo, por isso os cartões não repetem a sua própria animação de entrada. */
+function carSwitch(to) {
+  const p = current(), from = ui.carTab === 'shop' ? 'shop' : 'fuel';
+  if (!p || to === from) return;
+  const body = document.getElementById('car-body');
+  if (!body) { ui.carTab = to; render(); return; }
+  const tok = carSwitch.tok = (carSwitch.tok || 0) + 1, dir = to === 'shop' ? 1 : -1;
+  ui.carTab = to;
+  document.querySelectorAll('[data-act=car-tab]').forEach(b => b.classList.toggle('on', b.dataset.v === to)); syncSegs();          // o seletor desliza
+  const fab = document.querySelector('.fab');
+  if (fab) { fab.dataset.act = to === 'shop' ? 'add-shop' : 'add-fuel'; fab.setAttribute('aria-label', to === 'shop' ? 'Nova despesa do automóvel' : 'Novo abastecimento'); }
+  const troca = () => { body.innerHTML = to === 'shop' ? shopBody(current()) : fuelBody(current()); decorateTotals(); syncAnims(); };
+  body.getAnimations().forEach(a => a.cancel());
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return troca();
+  body.classList.add('swapping');
+  const saida = body.animate([{ opacity: 1, transform: 'translateX(0)' }, { opacity: 0, transform: 'translateX(' + (-dir * 28) + 'px)' }], { duration: 140, easing: 'ease-in', fill: 'forwards' });
+  saida.onfinish = () => {
+    if (tok !== carSwitch.tok) return;
+    troca(); saida.cancel();
+    body.animate([{ opacity: 0, transform: 'translateX(' + (dir * 28) + 'px)' }, { opacity: 1, transform: 'translateX(0)' }], { duration: 260, easing: 'cubic-bezier(.2, .8, .2, 1)' }).onfinish = () => { if (tok === carSwitch.tok) body.classList.remove('swapping'); };
+  };
+}
+function shopSheet(sp) {
+  const t = today0(), P = current();
+  const s = sp || { amount: '', date: ymd(t), type: ui.shopType || 'service', km: '', place: '', note: '' };
+  ui.editId = sp?.id || null; ui.shopType = s.type;
+  if (!P.vehicles.length) { P.vehicles.push({ id: uid(), name: 'O meu carro', type: 'car' }); saveDB(); }          // a primeira despesa cria o primeiro veículo
+  ui.sheetVeh = (s.veh && P.vehicles.some(x => x.id === s.veh)) ? s.veh : (P.vehicles.find(x => x.id === ui.fuelVeh) || P.vehicles[0]).id;
+  openSheet(`
+    <h2>${sp ? 'Editar despesa' : 'Nova despesa do automóvel'}</h2>
+    ${P.vehicles.length > 1 ? `<div class="field"><label>Veículo</label><div class="chips">${P.vehicles.map(x =>
+      `<button type="button" class="chip ${x.id === ui.sheetVeh ? 'on' : ''}" data-act="sveh" data-v="${x.id}" style="--c:var(--accent)">${ico(vehTypeOf(x.type).icon)} ${esc(x.name)}</button>`).join('')}</div></div>` : ''}
+    <div class="field"><label>Tipo</label><div class="chips">${SHOP_TYPES.map(tp =>
+      `<button type="button" class="chip ${s.type === tp.id ? 'on' : ''}" data-act="shop-type" data-v="${tp.id}" style="--c:${tp.color}">${ico(tp.icon)} ${tp.name}</button>`).join('')}</div></div>
+    <div class="field"><label>Valor (€) *</label><input class="input big" id="s-amount" inputmode="decimal" placeholder="0,00" value="${s.amount === '' ? '' : String(s.amount).replace('.', ',')}"></div>
+    <div class="row2">
+      <div class="field"><label>Data</label><input class="input" id="s-date" type="date" value="${s.date}"></div>
+      <div class="field" id="s-km-wrap" style="${KM_TYPES.includes(s.type) ? '' : 'display:none'}"><label>Quilómetros (opcional)</label><input class="input" id="s-km" inputmode="numeric" placeholder="Ex.: 84500" value="${s.km > 0 ? s.km : ''}"></div>
+    </div>
+    <span class="hint" id="s-km-hint" style="display:${KM_TYPES.includes(s.type) ? 'block' : 'none'};margin:-6px 0 16px">${shopKmHint(ui.sheetVeh)}</span>
+    <div class="field"><label>Local (opcional)</label><input class="input" id="s-place" maxlength="40" value="${esc(s.place || '')}"></div>
+    <div class="field"><label>Nota (opcional)</label><input class="input" id="s-note" maxlength="80" value="${esc(s.note || '')}"></div>
+    <div class="stack">
+      <button class="btn primary" data-act="save-shop">Guardar</button>
+      ${sp ? '<button class="btn danger" data-act="del-spend">Eliminar</button>' : ''}
+    </div>`);
+}
+function carFixSheet(c, type) {
+  const P = current(), t0 = carFixTypeOf(type || 'insurance'), n = new Date();
+  const s = c || { type: t0.id, name: '', amount: '', period: t0.period, day: n.getDate(), month: n.getMonth() + 1, remind: true, remindDays: 7, variable: false };
+  ui.editId = c?.id || null; ui.cfType = s.type; ui.cfPeriod = s.period; ui.cfRemind = s.remind; ui.cfVar = !!s.variable;
+  if (!P.vehicles.length) { P.vehicles.push({ id: uid(), name: 'O meu carro', type: 'car' }); saveDB(); }
+  ui.sheetVeh = (s.veh && P.vehicles.some(x => x.id === s.veh)) ? s.veh : (P.vehicles.find(x => x.id === ui.fuelVeh) || P.vehicles[0]).id;
+  const monthLabel = per => per === 'year' ? 'Mês' : 'Mês de um pagamento';
+  openSheet(`
+    <h2>${c ? 'Editar pagamento fixo' : 'Novo pagamento fixo'}</h2>
+    ${P.vehicles.length > 1 ? `<div class="field"><label>Veículo</label><div class="chips">${P.vehicles.map(x =>
+      `<button type="button" class="chip ${x.id === ui.sheetVeh ? 'on' : ''}" data-act="rveh" data-v="${x.id}" style="--c:var(--accent)">${ico(vehTypeOf(x.type).icon)} ${esc(x.name)}</button>`).join('')}</div></div>` : ''}
+    <div class="field"><label>Tipo</label><div class="chips">${CAR_FIX_TYPES.map(t =>
+      `<button type="button" class="chip ${s.type === t.id ? 'on' : ''}" data-act="cf-type" data-v="${t.id}" style="--c:${t.color}">${ico(t.icon)} ${t.name}</button>`).join('')}</div></div>
+    <div class="field"><label>Nome (opcional)</label><input class="input" id="cf-name" maxlength="30" placeholder="Ex.: ${carFixTypeOf(s.type).hint}" value="${esc(s.name === carFixTypeOf(s.type).name ? '' : s.name)}"></div>
+    <div class="switch-row" data-act="cf-var"><div><b>Valor variável</b><div class="hint">Para quando o valor muda de mês para mês. Indicas o valor real quando chega o recibo; até lá conta a estimativa.</div></div><div class="switch ${s.variable ? 'on' : ''}" id="cf-var-switch"></div></div>
+    <div class="field"><label id="cf-amount-label">${s.variable ? 'Estimativa de cada pagamento (€) *' : 'Valor de cada pagamento (€) *'}</label>
+      <input class="input big" id="cf-amount" inputmode="decimal" placeholder="0,00" value="${s.amount === '' ? '' : String(curAmount(s)).replace('.', ',')}">
+      ${c && pricesText(s) ? `<span class="hint">${pricesText(s)}</span>` : ''}</div>
+    <div class="field"><label>Paga-se</label>
+      <div class="chips">${Object.entries(FREQ).filter(([k]) => k !== 'bimonth').map(([k, f]) => `<button type="button" class="chip ${s.period === k ? 'on' : ''}" data-act="cf-period" data-v="${k}" style="--c:var(--accent)">${f.label.replace('Todos os meses', 'Mensal')}</button>`).join('')}</div></div>
+    <div class="row2">
+      <div class="field"><label>Dia do mês</label><input class="input" id="cf-day" type="number" min="1" max="31" value="${s.day}"></div>
+      <div class="field" id="cf-month-wrap" style="${s.period === 'month' ? 'display:none' : ''}"><label id="cf-month-label">${monthLabel(s.period)}</label>
+        <select class="input" id="cf-month">${MESES.map((nm, i) => `<option value="${i + 1}" ${s.month === i + 1 ? 'selected' : ''}>${nm}</option>`).join('')}</select></div>
+    </div>
+    <div class="switch-row" data-act="cf-remind"><div><b>Lembrar-me</b><div class="hint">Avisar antes do pagamento (e da renovação)</div></div><div class="switch ${s.remind ? 'on' : ''}" id="cf-rswitch"></div></div>
+    <div class="field" id="cf-rd-wrap" style="${s.remind ? '' : 'display:none'}"><label>Quanto tempo antes?</label>
+      <select class="input" id="cf-rd">${[1, 3, 7, 15, 30].map(k => `<option value="${k}" ${s.remindDays === k ? 'selected' : ''}>${k} dia${k > 1 ? 's' : ''} antes</option>`).join('')}</select></div>
+    <div class="stack">
+      <button class="btn primary" data-act="save-carfix">Guardar</button>
+      ${c ? '<button class="btn danger" data-act="del-carfix">Eliminar</button>' : ''}
+    </div>`);
+}
+function shopRemSheet(r) {
+  const P = current(), s = r || { type: 'oil', everyKm: 15000, everyMonths: 12 };
+  ui.editId = r?.id || null; ui.remType = s.type;
+  ui.sheetVeh = (s.veh && P.vehicles.some(x => x.id === s.veh)) ? s.veh : ((P.vehicles.find(x => x.id === ui.fuelVeh) || P.vehicles[0])?.id || '');
+  openSheet(`
+    <h2>${r ? 'Editar lembrete' : 'Novo lembrete'}</h2>
+    ${P.vehicles.length > 1 ? `<div class="field"><label>Veículo</label><div class="chips">${P.vehicles.map(x =>
+      `<button type="button" class="chip ${x.id === ui.sheetVeh ? 'on' : ''}" data-act="rveh" data-v="${x.id}" style="--c:var(--accent)">${ico(vehTypeOf(x.type).icon)} ${esc(x.name)}</button>`).join('')}</div></div>` : ''}
+    <div class="field"><label>O quê</label><div class="chips">${SHOP_TYPES.filter(tp => tp.km || tp.months).map(tp =>
+      `<button type="button" class="chip ${s.type === tp.id ? 'on' : ''}" data-act="rem-type" data-v="${tp.id}" style="--c:${tp.color}">${ico(tp.icon)} ${tp.name}</button>`).join('')}</div></div>
+    <div class="row2">
+      <div class="field"><label>A cada (km)</label><input class="input" id="r-km" inputmode="numeric" placeholder="Ex.: 15000" value="${s.everyKm > 0 ? s.everyKm : ''}"></div>
+      <div class="field"><label>A cada (meses)</label><input class="input" id="r-mo" inputmode="numeric" placeholder="Ex.: 12" value="${s.everyMonths > 0 ? s.everyMonths : ''}"></div>
+    </div>
+    <span class="hint" style="display:block;margin:-6px 0 16px">Preenche um dos dois, ou os dois: avisa pelo que chegar primeiro. Conta a partir do último registo deste tipo nas Outras despesas. Sem km? Usa só os meses, ou indica no veículo quantos km fazes por ano e a app estima.</span>
+    <div class="stack">
+      <button class="btn primary" data-act="save-shoprem">Guardar</button>
+      ${r ? '<button class="btn danger" data-act="del-shoprem">Eliminar</button>' : ''}
+    </div>`);
+}
+function carHelpSheet() {                                       // mini guia do separador Automóvel
+  openSheet(`
+    <h2>Como funciona</h2>
+    <div class="help-sec"><b>Combustível</b><p>Regista cada abastecimento com o valor e os litros. A app mostra o preço por litro e a tendência e, se juntares os km, o consumo médio e o custo por km.</p></div>
+    <div class="help-sec"><b>Outras despesas</b><p>Revisão, pneus, inspeção, portagens… cada uma com valor e data. O <b>seguro</b> e o <b>IUC</b> ficam em <b>Pagamentos fixos</b>: indicas o valor e de quanto em quanto tempo pagas (mensal, trimestral, semestral ou anual) e entram sozinhos no calendário. Podes criar <b>lembretes</b> (por exemplo, óleo a cada 15 000 km ou 12 meses) e a app avisa quando falta pouco.</p></div>
+    <div class="help-sec"><b>E os quilómetros?</b><p>Servem para o consumo, para os lembretes por km e para o custo real por km. <b>Nunca são obrigatórios.</b> Se não os souberes, a app estima-os pela tua média por dia (aparecem com ≈) e corrige quando puseres um valor real. Também podes indicar, no veículo, mais ou menos quantos km fazes por ano.</p></div>
+    <div class="help-sec"><b>Prefiro uma coisa mais simples</b><p>Podes ignorar tudo isto e usar só os <b>Gastos do dia a dia</b>: escolhes a categoria Combustível ou Transportes e registas apenas o valor. Os totais e o calendário contam na mesma.</p></div>
+    <div class="stack"><button class="btn primary" data-act="close-btn">Percebi</button></div>`);
+}
+function moreNavSheet() {                                     // o botão "Mais" da barra de baixo: os módulos que não cabem na barra
+  const P = current(), mods = MODULES.filter(m => m.ready && P.modules.includes(m.id)), hidden = mods.length > 3 ? mods.slice(2) : [], ic = navIcons();
+  openSheet(`<h2>Mais</h2><div class="more-grid">${hidden.map(m => `<button class="more-tile${ui.tab === m.id ? ' on' : ''}" data-act="more-go" data-id="${m.id}">${ic[m.id]}<span>${m.short}</span></button>`).join('')}</div>`);
+}
+
+/* Combustível (dentro do Carro): análise, abastecimentos detalhados e registos simples por completar */
+function fuelBody(p) {
   const t = today0(), pre = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-`;
   const fuels = p.spends.filter(s => s.cat === 'fuel');
   const monthTotal = fuels.filter(s => s.date.startsWith(pre) && s.date <= ymd(t)).reduce((a, s) => a + s.amount, 0);
   const v = p.vehicles.find(x => x.id === ui.fuelVeh) || p.vehicles[0];             // veículo escolhido
   if (v) ui.fuelVeh = v.id;
-  const detailed = fuels.filter(s => isFuel(s) && v && s.veh === v.id).sort((a, b) => b.date.localeCompare(a.date) || b.km - a.km);
-  const pending = fuels.filter(s => !isFuel(s)).sort((a, b) => b.date.localeCompare(a.date));
+  const detailed = fuels.filter(s => s.liters > 0 && v && s.veh === v.id).sort((a, b) => b.date.localeCompare(a.date) || (b.km || 0) - (a.km || 0));
+  const pending = fuels.filter(s => !(s.liters > 0)).sort((a, b) => b.date.localeCompare(a.date));
   const lim = ui.fuelLimit;
+  const fst = v ? fuelStats(p, v.id) : null, upToday = ymd(t), yearFuel = fuels.filter(x => x.date.startsWith(`${t.getFullYear()}-`) && x.date <= upToday).reduce((a, x) => a + x.amount, 0);
   const vehChips = p.vehicles.length > 1 ? `<div class="chips" style="margin-bottom:16px">${p.vehicles.map(x =>
     `<button class="chip ${v && x.id === v.id ? 'on' : ''}" data-act="fuel-veh" data-v="${x.id}" style="--c:var(--accent)">${ico(vehTypeOf(x.type).icon)} ${esc(x.name)}</button>`).join('')}</div>` : '';
   const vehCard = `<div class="card"><div class="card-h"><h3>Veículos</h3><button class="linkbtn accent" data-act="add-vehicle">${ico('plus')} Adicionar</button></div>
@@ -1476,20 +1824,17 @@ function vFuel(p) {
       .replace('data-act="edit-spend"', 'data-act="edit-fuel"');            // aqui abre sempre o formulário detalhado
   };
   const more = detailed.length > lim ? `<button class="more" data-act="more-fuel">Ver mais (${detailed.length - lim})</button>` : '';
-  return `<section class="screen">
-    <h1 class="page-title">Combustível</h1>
-    <div class="big-total" style="margin-top:16px">
-      <span>Gasto em ${MESES[t.getMonth()]} (até hoje)</span><b>${cost(monthTotal)}</b>
-      <span>${detailed.length} abastecimento${detailed.length === 1 ? '' : 's'} com detalhe${p.vehicles.length > 1 && v ? ` · ${esc(v.name)}` : ''}</span>
+  return `<div class="big-total" style="margin-top:16px">
+      <span>Gasto em ${MESES[t.getMonth()]}</span><b>${cost(monthTotal)}</b>
+      ${btStats([[cost(yearFuel), 'este ano'], fst ? [nf(fst.last.v, 3) + ' €', 'último preço/L'] : null, [fuels.length, fuels.length === 1 ? 'abastecimento' : 'abastecimentos']])}
     </div>
     ${vehChips}
-    ${fuelCard(p, v) || `<div class="card"><div class="empty-state"><div class="emoji">${ico('fuel')}</div>Ainda sem abastecimentos com detalhe.<br>Toca em <b>+</b> e regista litros e km para veres o consumo e a tendência do preço.</div></div>`}
+    ${fuelCard(p, v) || `<div class="card"><div class="empty-state"><div class="emoji">${ico('fuel')}</div>Ainda sem abastecimentos com detalhe.<br>Toca em <b>+</b> e regista os litros para veres o preço por litro; com os km, vês também o consumo.</div></div>`}
     ${detailed.length ? `<div class="card"><div class="card-h"><h3>Abastecimentos</h3></div>${detailed.slice(0, lim).map(row).join('')}${more}</div>` : ''}
     ${pending.length ? `<div class="card"><div class="card-h"><h3>Por completar</h3><span class="muted small">${pending.length}</span></div>
-      <p class="hint" style="margin:-6px 0 6px">Registos só com o valor (feitos nos Gastos do dia a dia). Toca para juntar litros e km.</p>
+      <p class="hint" style="margin:-6px 0 6px">Registos só com o valor (feitos nos Gastos do dia a dia). Toca para juntar os litros (e, se quiseres, os km).</p>
       ${pending.slice(0, 10).map(row).join('')}</div>` : ''}
-    ${vehCard}
-  </section>`;
+    ${vehCard}`;
 }
 
 /* ── Vícios: hábitos criados pelo utilizador ──
@@ -1773,15 +2118,16 @@ function vSummaryHTML(p) {
   const legend = shown.map(r => `<div class="lg"><i style="background:${r.h.color}"></i><span>${ico(r.h.icon)} ${esc(r.h.name)}</span><b>${cost(r.spent)}</b></div>`).join('');
   const proj = p.habits.filter(h => h.kind !== 'games').map(h => habitStats(p, h).proj).filter(v => v !== null);   // compras de jogos não são periódicas
   const label = PERIODS.find(x => x[0] === ui.vperiod)[2];
+  const days = Math.max(1, Math.round((parseYmd(b) - parseYmd(a)) / DAY) + 1);                  // dias do período, para a média por dia
   return `<div class="big-total">
       <div class="seg four on-grad">${PERIODS.map(([k, l]) => `<button data-act="vperiod-sum" data-v="${k}" class="${ui.vperiod === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <span>Visão geral · gasto ${label}</span><b data-v="${total}">${cost(total)}</b>
-      <span>${shown.length} hábito${shown.length === 1 ? '' : 's'} com gastos</span>
+      ${btStats([[cost(total / days), 'média por dia'], proj.length ? [cost(proj.reduce((x, v) => x + v, 0)), 'projeção anual'] : null, [shown.length, shown.length === 1 ? 'hábito com gastos' : 'hábitos com gastos']])}
     </div>
     <div class="card">
       ${bar}${legend || '<p class="muted small">Sem gastos neste período.</p>'}
       ${won > 0 ? `<div class="coming"><span>Ganhos (à parte dos gastos)</span><b class="pos">+${nf(won)} €</b></div>` : ''}
-      ${proj.length ? `<div class="coming"><span>Projeção anual (hábitos por unidade e valor)</span><b class="neg">${cost(proj.reduce((x, v) => x + v, 0))}</b></div>` : ''}
+      ${proj.length ? `<p class="hint" style="margin-top:8px">A projeção anual usa os hábitos por unidade e valor.</p>` : ''}
     </div>`;
 }
 
@@ -1827,8 +2173,7 @@ function vHouse(p) {
     <h1 class="page-title">Casa</h1>
     <div class="big-total" style="margin-top:16px">
       <span>Todos os meses</span><b>${cost(monthlyTotal)}</b>
-      ${otherInfos.length ? `<span class="bt-sub">Outras frequências: ${cost(othersYear)}/ano</span>` : ''}
-      <span class="bt-sub">Total ≈ ${cost(monthlyTotal * 12 + othersYear)}/ano</span>
+      ${btStats([[cost(monthlyTotal * 12 + othersYear), 'por ano'], otherInfos.length ? [cost(othersYear), 'outras frequências'] : null, [p.bills.length, p.bills.length === 1 ? 'conta' : 'contas']])}
     </div>
     ${pendCard}
     ${p.bills.length ? '' : `<div class="card"><div class="empty-state"><div class="emoji">${ico('home')}</div>Ainda não tens contas de casa.<br>Toca em <b>+</b> para juntar a renda, a luz, a água…</div></div>`}
@@ -1851,6 +2196,7 @@ function vSpend(p) {
   const t = today0();
   const monthSpends = p.spends.filter(s => { const d = parseYmd(s.date); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth(); });
   const total = monthSpends.filter(s => parseYmd(s.date) <= t).reduce((a, s) => a + s.amount, 0);
+  const todaySum = monthSpends.filter(s => s.date === ymd(t)).reduce((a, s) => a + s.amount, 0);
   const days = [...new Set(monthSpends.map(s => s.date))].sort().reverse();
   const moreDays = days.length > ui.spendDays ? `<button class="more" data-act="more-spend">Ver mais dias (${days.length - ui.spendDays})</button>` : '';
   const groups = days.slice(0, ui.spendDays).map(day => {
@@ -1862,8 +2208,8 @@ function vSpend(p) {
   return `<section class="screen">
     <h1 class="page-title">Gastos do dia a dia</h1>
     <div class="big-total" style="margin-top:16px">
-      <span>Gasto em ${MESES[t.getMonth()]} (até hoje)</span><b>${cost(total)}</b>
-      <span>${monthSpends.length} registo${monthSpends.length === 1 ? '' : 's'}</span>
+      <span>Gasto em ${MESES[t.getMonth()]}</span><b>${cost(total)}</b>
+      ${btStats([[cost(todaySum), 'hoje'], [cost(total / t.getDate()), 'média por dia'], [monthSpends.length, monthSpends.length === 1 ? 'registo' : 'registos']])}
     </div>
     ${groups ? groups + moreDays : `<div class="card"><div class="empty-state"><div class="emoji">${ico('spend')}</div>Ainda sem gastos este mês.<br>Toca em <b>+</b> sempre que gastares algo.</div></div>`}
     <p class="hint">Vê outros meses no calendário, no Início.</p>
@@ -1993,7 +2339,7 @@ function afterProfileRender() {
 }
 
 /* ── Cópias de segurança ── */
-const hasData = p => p.subs.length > 0 || p.spends.length > 0 || p.bills.length > 0 || Object.keys(p.hlog).length > 0;
+const hasData = p => p.subs.length > 0 || p.spends.length > 0 || p.bills.length > 0 || p.carFix.length > 0 || Object.keys(p.hlog).length > 0;
 const DAY = 864e5;
 function needsBackup(p) {      // lembrete suave: só com dados e passados 30 dias
   return hasData(p) && Date.now() - new Date(p.lastBackup || p.created).getTime() > 14 * DAY;
@@ -2064,11 +2410,46 @@ async function importBackup(file) {
 }
 
 /* Folhas (modais) */
+let sheetTok = 0, sheetClosing = false;
 function openSheet(html) {
+  sheetTok++; sheetClosing = false;
   $('#sheet-root').innerHTML = `<div class="overlay" data-act="close-sheet"><div class="sheet"><div class="grab"></div>${html}</div></div>`;
   syncSegs(); syncModalLock();
 }
 function closeSheet() { $('#sheet-root').innerHTML = ''; syncModalLock(); }
+/* Fechar com animação: a janela desliza para baixo e o fundo escurecido esbate. Também se fecha arrastando a barrinha de cima para baixo (a janela segue o dedo). */
+function dismissSheet() {
+  const sh = document.querySelector('#sheet-root .sheet'), ov = document.querySelector('#sheet-root .overlay');
+  if (!sh || matchMedia('(prefers-reduced-motion: reduce)').matches) return closeSheet();
+  if (sheetClosing) return;
+  sheetClosing = true; const tok = ++sheetTok;
+  sh.style.animation = 'none'; sh.style.transition = 'transform .26s cubic-bezier(.4, 0, 1, 1)'; sh.style.transform = 'translateY(105%)';
+  if (ov) { ov.style.animation = 'none'; ov.style.transition = 'background-color .26s ease'; ov.style.backgroundColor = 'rgba(0, 0, 0, 0)'; }
+  setTimeout(() => { if (tok === sheetTok) { sheetClosing = false; closeSheet(); } }, 280);
+}
+let sheetDrag = null;
+document.addEventListener('pointerdown', e => {
+  const g = e.target.closest?.('#sheet-root .grab'); if (!g || sheetClosing) return;
+  const sh = g.closest('.sheet'), ov = g.closest('.overlay'); if (!sh) return;
+  sheetDrag = { id: e.pointerId, y0: e.clientY, sh, ov, dy: 0, v: 0, ly: e.clientY, lt: performance.now(), h: sh.offsetHeight || 400 };
+  sh.style.animation = 'none'; sh.style.transition = 'none'; if (ov) { ov.style.animation = 'none'; ov.style.transition = 'none'; }
+  try { g.setPointerCapture(e.pointerId); } catch {}
+});
+document.addEventListener('pointermove', e => {
+  const d = sheetDrag; if (!d || e.pointerId !== d.id) return;
+  d.dy = Math.max(0, e.clientY - d.y0); const now = performance.now();
+  d.v = (e.clientY - d.ly) / Math.max(1, now - d.lt); d.ly = e.clientY; d.lt = now;        // velocidade (px/ms) para decidir se foi um "empurrão"
+  d.sh.style.transform = 'translateY(' + d.dy + 'px)';
+  if (d.ov) d.ov.style.backgroundColor = 'rgba(0, 0, 0, ' + (.55 * (1 - Math.min(1, d.dy / d.h))).toFixed(3) + ')';
+});
+const endSheetDrag = e => {
+  const d = sheetDrag; if (!d || (e && e.pointerId !== d.id)) return; sheetDrag = null;
+  if (d.dy > 110 || (d.dy > 60 && d.v > .6)) return dismissSheet();                       // arrastou o suficiente (ou deu um empurrão): fecha
+  d.sh.style.transition = 'transform .3s cubic-bezier(.2, .8, .2, 1)'; d.sh.style.transform = '';
+  if (d.ov) { d.ov.style.transition = 'background-color .3s ease'; d.ov.style.backgroundColor = ''; }
+  setTimeout(() => { d.sh.style.transition = ''; if (d.ov) d.ov.style.transition = ''; }, 320);
+};
+document.addEventListener('pointerup', endSheetDrag); document.addEventListener('pointercancel', endSheetDrag);
 /* Com uma janela aberta, a página por baixo não deve mexer: ao arrastar dentro da janela, o scroll "passava" para o fundo. */
 function syncModalLock() { document.documentElement.classList.toggle('modal-open', !!document.querySelector('#sheet-root .overlay, .dlg-overlay:not(.out)')); }
 
@@ -2117,8 +2498,8 @@ function spendSheet(sp) {
   const s = sp || { amount: '', cat: 'other', date: ymd(t), note: '' };
   ui.sheetCat = s.cat; ui.editId = sp?.id || null;
   const fuelHint = current().modules.includes('fuel')
-    ? 'Aqui só o valor. Para litros e consumo, usa o separador Combustível.'
-    : 'Aqui só o valor. Para litros e consumo, ativa o módulo Combustível nas Definições.';
+    ? 'Aqui só o valor. Para mais detalhes, usa o separador Automóvel.'
+    : 'Aqui só o valor. Para litros e consumo, ativa o módulo Automóvel nas Definições.';
   openSheet(`
     <h2>${sp ? 'Editar gasto' : 'Registar gasto'}</h2>
     <div class="field"><label>Valor (€)</label><input class="input big" id="g-amount" inputmode="decimal" placeholder="0,00" value="${s.amount === '' ? '' : String(s.amount).replace('.', ',')}"></div>
@@ -2133,7 +2514,6 @@ function spendSheet(sp) {
       <button class="btn primary" data-act="save-spend">Guardar</button>
       ${sp ? '<button class="btn danger" data-act="del-spend">Eliminar</button>' : ''}
     </div>`);
-  if (!sp) setTimeout(() => $('#g-amount')?.focus(), 300);
 }
 
 /* Criar / editar um hábito (vício). Tudo é opcional e escolhido por quem usa. */
@@ -2202,7 +2582,6 @@ function habitSheet(h) {
       ${isNew ? '' : '<button class="btn danger" data-act="del-habit">Eliminar hábito</button>'}
     </div>`);
   hxApply();
-  if (isNew) setTimeout(() => $('#h-name')?.focus(), 300);
 }
 
 /* Mostra só os campos do modelo escolhido. */
@@ -2329,21 +2708,20 @@ function priceFromSheet(item, newAmount) {
 
 /* Valor real de uma fatura (contas variáveis). Sem ele, conta a estimativa. */
 function invoiceSheet(bid, ym) {
-  const p = current(), b = p.bills.find(x => x.id === bid), real = p.billLog[`${bid}:${ym}`];
+  const p = current(), car = !p.bills.some(x => x.id === bid), b = (car ? p.carFix : p.bills).find(x => x.id === bid), real = p.billLog[`${bid}:${ym}`];
   const [y, m] = ym.split('-').map(Number), prev = billReals(p, b).filter(r => r.ym < ym).pop();
   ui.inv = { bid, ym };
   openSheet(`
-    <h2>Fatura · ${esc(b.name)}</h2>
+    <h2>${car ? 'Pagamento' : 'Fatura'} · ${esc(b.name)}</h2>
     <p class="muted" style="margin:-10px 0 18px">${MESES[m - 1]} de ${y}</p>
-    <div class="field"><label>Valor da fatura (€)</label>
+    <div class="field"><label>${car ? 'Valor pago (€)' : 'Valor da fatura (€)'}</label>
       <input class="input big" id="i-amount" inputmode="decimal" placeholder="0,00" value="${real !== undefined ? String(real).replace('.', ',') : ''}">
-      <span class="hint">Estimativa: ${nf(priceAt(b, ym))} €${prev ? ` · fatura anterior: ${nf(prev.v)} €` : ''}</span></div>
+      <span class="hint">Estimativa: ${nf(priceAt(b, ym))} €${prev ? ` · ${car ? 'anterior' : 'fatura anterior'}: ${nf(prev.v)} €` : ''}</span></div>
     <div class="stack">
       <button class="btn primary" data-act="save-invoice">Guardar</button>
       ${real !== undefined ? '<button class="btn danger" data-act="clear-invoice">Voltar à estimativa</button>' : ''}
-      <button class="btn ghost" data-act="edit-bill" data-id="${b.id}">Editar a conta</button>
+      <button class="btn ghost" data-act="${car ? 'edit-carfix' : 'edit-bill'}" data-id="${b.id}">${car ? 'Editar o pagamento' : 'Editar a conta'}</button>
     </div>`);
-  setTimeout(() => $('#i-amount')?.focus(), 300);
 }
 
 /* Compra de um jogo (modelo Jogos): título, preço, data e reembolso opcional. */
@@ -2368,7 +2746,6 @@ function gameSheet(hid, key, itemId) {
       <button class="btn primary" data-act="save-game">Guardar</button>
       ${it ? '<button class="btn danger" data-act="del-game">Eliminar compra</button>' : ''}
     </div>`);
-  if (!it) setTimeout(() => $('#gm-name')?.focus(), 300);
 }
 /* Os totais do dia derivam sempre da lista de compras desse dia. */
 function recalcDay(p, key) {
@@ -2435,7 +2812,6 @@ function hdaySheet(hid, key, mode) {
       <button class="btn primary" data-act="save-hday">Guardar</button>
       ${key ? '<button class="btn danger" data-act="del-hday">Eliminar registo</button>' : ''}
     </div>`);
-  if (!key && !unit) setTimeout(() => ($('#d-spent') || $('#d-won'))?.focus(), 300);
 }
 
 /* Criar / editar um veículo (módulo Combustível). */
@@ -2445,13 +2821,13 @@ function vehicleSheet(v) {
   openSheet(`
     <h2>${v ? 'Editar veículo' : 'Novo veículo'}</h2>
     <div class="field"><label>Nome</label><input class="input" id="v-name" maxlength="24" placeholder="Ex.: Carro da família" value="${esc(s.name)}"></div>
+    <div class="field"><label>Km por ano (aproximado, opcional)</label><input class="input" id="v-kmyear" inputmode="numeric" placeholder="Ex.: 15000" value="${s.kmYear > 0 ? s.kmYear : ''}"><span class="hint">Ajuda a app a estimar os km quando não os registas.</span></div>
     <div class="field"><label>Tipo</label><div class="chips">${VEHICLE_TYPES.map(t =>
       `<button type="button" class="chip ${s.type === t.id ? 'on' : ''}" data-act="veh-type" data-v="${t.id}" style="--c:var(--accent)">${ico(t.icon)} ${t.name}</button>`).join('')}</div></div>
     <div class="stack">
       <button class="btn primary" data-act="save-vehicle">Guardar</button>
       ${v ? '<button class="btn danger" data-act="del-vehicle">Eliminar veículo</button>' : ''}
     </div>`);
-  if (!v) setTimeout(() => $('#v-name')?.focus(), 300);
 }
 
 /* Abastecimento detalhado (módulo Combustível): litros e km obrigatórios. */
@@ -2477,7 +2853,7 @@ function fuelSheet(sp) {
       <div class="field"><label>Preço por litro (€)</label><input class="input" id="g-price" inputmode="decimal" placeholder="0,000" value="${s.liters > 0 ? dec(s.amount / s.liters, 3) : ''}"></div>
     </div>
     <span class="hint" style="display:block;margin:-6px 0 16px">Preenche dois destes três e o terceiro calcula-se sozinho.</span>
-    <div class="field"><label>Quilómetros do conta-quilómetros *</label>
+    <div class="field"><label>Quilómetros do conta-quilómetros (opcional)</label>
       <input class="input" id="g-km" inputmode="numeric" placeholder="Ex.: 84500" value="${s.km > 0 ? s.km : ''}">
       <span class="hint" id="g-km-hint">${fuelKmHint(ui.sheetVeh, sp?.id)}</span></div>
     <div class="switch-row" data-act="full-toggle"><div><b>Depósito cheio</b><div class="hint">Necessário para calcular o consumo</div></div><div class="switch ${ui.sheetFull ? 'on' : ''}" id="g-full-switch"></div></div>
@@ -2489,7 +2865,6 @@ function fuelSheet(sp) {
       <button class="btn primary" data-act="save-fuel">Guardar</button>
       ${sp ? '<button class="btn danger" data-act="del-spend">Eliminar</button>' : ''}
     </div>`);
-  if (!sp) setTimeout(() => $('#g-amount')?.focus(), 300);
 }
 
 /* Fluxos de senha. Cada passo abre o teclado e passa ao seguinte quando está certo. */
@@ -2633,8 +3008,8 @@ function syncNav() {                                  // garante que a barra est
 }
 function goTab(tab) {                                 // mudar de separador: a barra começa a deslizar JÁ, antes de o ecrã novo ser desenhado, e o ícone "faz a sua gracinha"
   const same = ui.tab === tab;
-  if (!same) placeNavInd(document.querySelector(`.nav button[data-tab="${tab}"]`));
-  ui.tab = tab; ui.spendDays = 10; ui.fuelLimit = 10; ui.firstRun = false; render();
+  if (!same) placeNavInd(document.querySelector(`.nav button[data-tab="${tab}"]`) || document.querySelector('.nav button[data-tab="more"]'));
+  ui.tab = tab; ui.spendDays = 10; ui.fuelLimit = 10; ui.shopLimit = 10; ui.firstRun = false; render();
   syncNav();
   const b = document.querySelector('.nav button.on');
   if (b && !same) { b.classList.add('just'); setTimeout(() => b.classList.remove('just'), 700); }
@@ -2683,6 +3058,31 @@ document.addEventListener('input', e => {
   });
 });
 document.addEventListener('change', e => { if (e.target.closest?.('[data-fx]')) saveDB(); });
+/* Cursores (velocidade e quantidade): só se mexem se agarrares no botão redondo e arrastares para os lados. Tocar na barra, ou arrastar para cima e para baixo
+   (para fazer scroll), já não muda nada. Por isso o <input> não recebe toques (pointer-events: none) e este código trata do gesto. */
+let fxDrag = null;
+document.addEventListener('pointerdown', e => {
+  const box = e.target.closest?.('.fx-in'); if (!box) return;
+  const r = box.querySelector('.fx-range'); if (!r) return;
+  const b = r.getBoundingClientRect(), min = +r.min, max = +r.max, tw = 22, usable = b.width - tw;
+  const cx = b.left + tw / 2 + (+r.value - min) / (max - min) * usable;
+  if (Math.abs(e.clientX - cx) > 26 || Math.abs(e.clientY - (b.top + b.height / 2)) > 22) return;      // fora do botão: não faz nada (o toque serve para o scroll)
+  fxDrag = { id: e.pointerId, r, min, max, step: +r.step || 1, left: b.left + tw / 2, usable, off: e.clientX - cx, x0: e.clientX, y0: e.clientY, on: false, box };
+});
+document.addEventListener('pointermove', e => {
+  const d = fxDrag; if (!d || e.pointerId !== d.id) return;
+  if (!d.on) {                                                                 // decide cedo: gesto para os lados = mexer no cursor; vertical = deixa fazer scroll
+    const dx = Math.abs(e.clientX - d.x0), dy = Math.abs(e.clientY - d.y0);
+    if (dy > 8 && dy > dx) { fxDrag = null; return; }
+    if (dx < 4) return;
+    d.on = true; try { d.box.setPointerCapture(e.pointerId); } catch {}
+  }
+  const t = Math.max(0, Math.min(1, (e.clientX - d.off - d.left) / d.usable));
+  const v = Math.round((d.min + t * (d.max - d.min)) / d.step) * d.step;
+  if (+d.r.value !== v) { d.r.value = v; d.r.dispatchEvent(new Event('input', { bubbles: true })); }
+});
+const endFxDrag = e => { const d = fxDrag; if (!d || (e && e.pointerId !== d.id)) return; fxDrag = null; if (d.on) d.r.dispatchEvent(new Event('change', { bubbles: true })); };
+document.addEventListener('pointerup', endFxDrag); document.addEventListener('pointercancel', endFxDrag);
 /* O observador só acorda para o que lhe interessa (seletores, barra de baixo, capa e cartões de total) e mede tudo de uma vez, no fotograma seguinte,
    para não forçar cálculos de layout a meio de uma animação. */
 /* Cartões de total em 3D: ao tocar e arrastar, o cartão inclina-se para onde está o dedo, em tempo real; ao largar, volta devagar à posição.
@@ -2802,7 +3202,7 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
     case 'data-guide': dataGuideSheet(); break;
     case 'hide-ios-hint': try { localStorage.setItem('konto.hint.ios', '1'); } catch {} render(); break;
     case 'go-appearance': appearanceSheet(p); break;                // janela rápida da aparência, a partir do Início
-    case 'close-btn': closeSheet(); break;
+    case 'close-btn': dismissSheet(); break;
     case 'to-welcome': wipe(el, () => go('welcome'), '[data-act=start]'); break;                        // o ponto de partida do Konto
     case 'theme-pal': case 'theme-style': case 'theme-mode': case 'theme-cal': {       // o tema aplica-se logo e fica guardado neste perfil
       const key = act === 'theme-pal' ? 'palette' : act === 'theme-style' ? 'style' : act === 'theme-cal' ? 'cal' : 'mode';
@@ -2849,7 +3249,7 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
       break;
     }
     case 'pin-key': pinSheet.handle(el.dataset.k); break;
-    case 'close-sheet': if (e.target === el) closeSheet(); break;
+    case 'close-sheet': if (e.target === el) dismissSheet(); break;
     case 'tab': goTab(el.dataset.tab); break;   // sair do separador "primeira vez" por aqui também conta como concluído (ver goTab)
     case 'toggle-module': {
       const m = MODULES.find(x => x.id === el.dataset.id);
@@ -2978,7 +3378,7 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
       saveDB(); closeSheet(); render(); toast('Conta guardada'); break;
     }
     case 'price-apply': case 'price-all': {                          // valor novo: a partir de um mês, ou corrigir desde sempre
-      const { kind, id, data } = ui.pend, item = (kind === 'sub' ? p.subs : p.bills).find(x => x.id === id);
+      const { kind, id, data } = ui.pend, item = (kind === 'sub' ? p.subs : kind === 'car' ? p.carFix : p.bills).find(x => x.id === id);
       const { amount, ...rest } = data; Object.assign(item, rest);
       applyPriceChange(item, amount, act === 'price-all' ? null : $('#pf-from').value);
       ui.pend = null; saveDB(); closeSheet(); render(); toast('Guardado'); break;
@@ -3040,8 +3440,97 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
     case 'add-spend': spendSheet(); break;
     case 'edit-spend': {                       // abastecimento com detalhe abre o formulário detalhado
       const s = p.spends.find(x => x.id === el.dataset.id);
-      isFuel(s) ? fuelSheet(s) : spendSheet(s); break;
+      isShop(s) ? shopSheet(s) : (s.cat === 'fuel' && s.liters > 0) ? fuelSheet(s) : spendSheet(s); break;
     }
+    case 'car-tab': carSwitch(el.dataset.v); break;
+    case 'car-help': carHelpSheet(); break;
+    case 'add-shop': shopSheet(); break;
+    case 'edit-shop': shopSheet(p.spends.find(s => s.id === el.dataset.id)); break;
+    case 'more-shop': ui.shopLimit = (ui.shopLimit || 10) + 10; render(); break;
+    case 'shop-type':
+      ui.shopType = el.dataset.v; document.querySelectorAll('[data-act=shop-type]').forEach(c => c.classList.toggle('on', c === el));
+      { const k = KM_TYPES.includes(ui.shopType); $('#s-km-wrap').style.display = k ? '' : 'none'; $('#s-km-hint').style.display = k ? 'block' : 'none'; }
+      break;
+    case 'sveh':
+      ui.sheetVeh = el.dataset.v; document.querySelectorAll('[data-act=sveh]').forEach(c => c.classList.toggle('on', c === el));
+      $('#s-km-hint').textContent = shopKmHint(ui.sheetVeh); break;
+    case 'save-shop': {
+      const amount = parseAmount($('#s-amount').value), date = $('#s-date').value, kmRaw = KM_TYPES.includes(ui.shopType) ? $('#s-km').value.trim() : '', km = kmRaw ? parseInt(kmRaw, 10) : 0;
+      if (!(amount > 0)) return toast('Indica o valor');
+      if (!date) return toast('Indica a data');
+      if (kmRaw && !(km > 0)) return toast('Os quilómetros têm de ser um número');
+      if (km) {                                                       // os km de um veículo só podem subir com o tempo
+        const others = p.spends.filter(s => s.veh === ui.sheetVeh && s.km > 0 && s.id !== ui.editId && (isFuel(s) || isShop(s)));
+        const before = others.filter(s => s.date <= date).map(s => s.km), after = others.filter(s => s.date > date).map(s => s.km);
+        if (before.length && km < Math.max(...before)) return toast(`Os km não podem ser inferiores a ${nf(Math.max(...before), 0)} (registo anterior deste veículo)`);
+        if (after.length && km > Math.min(...after)) return toast(`Os km não podem ser superiores a ${nf(Math.min(...after), 0)} (registo seguinte deste veículo)`);
+      }
+      const data = { amount, cat: 'shop', date, type: ui.shopType, km: km || undefined, place: $('#s-place').value.trim(), note: $('#s-note').value.trim(), veh: ui.sheetVeh };
+      if (ui.editId) { const o = p.spends.find(s => s.id === ui.editId); Object.assign(o, data); if (!km) delete o.km; } else p.spends.push({ id: uid(), ...data });
+      saveDB(); closeSheet(); render(); toast('Despesa registada'); break;
+    }
+    case 'add-carfix': carFixSheet(null, el.dataset.v); break;
+    case 'edit-carfix': {                                              // no calendário (id com o mês): variável abre o valor real; fixo abre o pagamento
+      const [cid, ym] = el.dataset.id.split(':'), c = p.carFix.find(x => x.id === cid);
+      c.variable && ym ? invoiceSheet(cid, ym) : carFixSheet(c); break;
+    }
+    case 'cf-type': {
+      const t = carFixTypeOf(el.dataset.v);
+      document.querySelectorAll('[data-act=cf-type]').forEach(c => c.classList.toggle('on', c === el));
+      $('#cf-name').placeholder = `Ex.: ${t.hint}`; ui.cfType = t.id;
+      if (!ui.editId) { const b = document.querySelector(`[data-act=cf-period][data-v=${t.period}]`); if (b) b.click(); }     // um novo já traz a frequência habitual
+      break;
+    }
+    case 'cf-period':
+      ui.cfPeriod = el.dataset.v;
+      document.querySelectorAll('[data-act=cf-period]').forEach(c => c.classList.toggle('on', c === el));
+      $('#cf-month-wrap').style.display = ui.cfPeriod === 'month' ? 'none' : '';
+      $('#cf-month-label').textContent = ui.cfPeriod === 'year' ? 'Mês' : 'Mês de um pagamento'; break;
+    case 'cf-var': ui.cfVar = !ui.cfVar; $('#cf-var-switch').classList.toggle('on', ui.cfVar); $('#cf-amount-label').textContent = ui.cfVar ? 'Estimativa de cada pagamento (€) *' : 'Valor de cada pagamento (€) *'; break;
+    case 'cf-remind':
+      ui.cfRemind = !ui.cfRemind; $('#cf-rswitch').classList.toggle('on', ui.cfRemind); $('#cf-rd-wrap').style.display = ui.cfRemind ? '' : 'none';
+      if (ui.cfRemind && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+      break;
+    case 'save-carfix': {
+      const t = carFixTypeOf(ui.cfType), name = $('#cf-name').value.trim() || t.name;
+      const amount = parseAmount($('#cf-amount').value), day = Math.min(31, Math.max(1, parseInt($('#cf-day').value, 10) || 0));
+      if (!(amount > 0)) return toast('Indica o valor');
+      if (!day) return toast('Indica o dia do pagamento');
+      const data = { name, type: t.id, amount, period: ui.cfPeriod, day, month: +$('#cf-month').value, remind: ui.cfRemind, remindDays: +$('#cf-rd').value, veh: ui.sheetVeh, variable: ui.cfVar };
+      if (ui.editId) {
+        const old = p.carFix.find(x => x.id === ui.editId);
+        if (Math.abs(amount - curAmount(old)) > 0.004) { ui.pend = { kind: 'car', id: old.id, data }; return priceFromSheet(old, amount); }
+        const { amount: _same, ...rest } = data; Object.assign(old, rest);
+      } else p.carFix.push({ id: uid(), created: new Date().toISOString(), ...data });
+      saveDB(); closeSheet(); render(); toast('Guardado'); break;
+    }
+    case 'del-carfix':
+      if (await askConfirm({ title: 'Eliminar este pagamento?', text: 'Deixa de contar no calendário e nos totais. Não dá para desfazer.', ok: 'Eliminar', danger: true, icon: 'trash' })) { const cid = ui.editId; p.carFix = p.carFix.filter(x => x.id !== cid); for (const k of Object.keys(p.billLog)) if (k.startsWith(cid + ':')) delete p.billLog[k]; saveDB(); closeSheet(); render(); toast('Eliminado'); }
+      break;
+    case 'add-shoprem': shopRemSheet(); break;
+    case 'edit-shoprem': shopRemSheet(p.shopRems.find(r => r.id === el.dataset.id)); break;
+    case 'rem-type': {
+      ui.remType = el.dataset.v; document.querySelectorAll('[data-act=rem-type]').forEach(c => c.classList.toggle('on', c === el));
+      if (!ui.editId) { const tp = shopTypeOf(ui.remType); $('#r-km').value = tp.km || ''; $('#r-mo').value = tp.months || ''; }       // um lembrete novo já traz os valores habituais
+      break;
+    }
+    case 'rveh': ui.sheetVeh = el.dataset.v; document.querySelectorAll('[data-act=rveh]').forEach(c => c.classList.toggle('on', c === el)); break;
+    case 'save-shoprem': {
+      const everyKm = parseInt($('#r-km').value, 10) || 0, everyMonths = parseInt($('#r-mo').value, 10) || 0;
+      if (!everyKm && !everyMonths) return toast('Indica os km, os meses, ou os dois');
+      const data = { type: ui.remType, veh: ui.sheetVeh || '', everyKm, everyMonths };
+      if (ui.editId) Object.assign(p.shopRems.find(r => r.id === ui.editId), data); else p.shopRems.push({ id: uid(), ...data });
+      saveDB(); closeSheet(); render(); toast('Lembrete guardado'); break;
+    }
+    case 'del-shoprem':
+      if (await askConfirm({ title: 'Eliminar este lembrete?', text: 'As despesas já registadas não se perdem.', ok: 'Eliminar', danger: true, icon: 'trash' })) { p.shopRems = p.shopRems.filter(r => r.id !== ui.editId); saveDB(); closeSheet(); render(); }
+      break;
+    case 'quick-rem': {
+      const tp = shopTypeOf(el.dataset.v);
+      p.shopRems.push({ id: uid(), type: tp.id, veh: ui.fuelVeh || p.vehicles[0]?.id || '', everyKm: tp.km || 0, everyMonths: tp.months || 0 }); saveDB(); render(); toast('Lembrete criado'); break;
+    }
+    case 'more-nav': moreNavSheet(); break;
+    case 'more-go': closeSheet(); goTab(el.dataset.id); break;
     case 'add-fuel': fuelSheet(); break;
     case 'edit-fuel': fuelSheet(p.spends.find(s => s.id === el.dataset.id)); break;
     case 'fuel-veh': ui.fuelVeh = el.dataset.v; ui.fuelLimit = 10; render(); break;           // trocar de veículo no separador
@@ -3058,15 +3547,16 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
       const name = $('#v-name').value.trim();
       if (!name) return toast('Dá um nome ao veículo');
       if (p.vehicles.some(v => v.id !== ui.editId && v.name.toLowerCase() === name.toLowerCase())) return toast('Já tens um veículo com esse nome');
-      if (ui.editId) Object.assign(p.vehicles.find(v => v.id === ui.editId), { name, type: ui.vehType });
-      else { const v = { id: uid(), name, type: ui.vehType }; p.vehicles.push(v); ui.fuelVeh = v.id; }
+      const kmYear = parseInt($('#v-kmyear').value, 10) || 0;
+      if (ui.editId) Object.assign(p.vehicles.find(v => v.id === ui.editId), { name, type: ui.vehType, kmYear });
+      else { const v = { id: uid(), name, type: ui.vehType, kmYear }; p.vehicles.push(v); ui.fuelVeh = v.id; }
       saveDB(); closeSheet(); render(); toast('Veículo guardado'); break;
     }
     case 'del-vehicle': {
       const vid = ui.editId, mine = p.spends.filter(s => s.veh === vid);
-      const msg = mine.length ? `O veículo e os seus ${mine.length} abastecimento${mine.length === 1 ? '' : 's'} serão eliminados. Não dá para desfazer.` : 'Não dá para desfazer.';
+      const msg = mine.length ? `O veículo e os seus ${mine.length} registo${mine.length === 1 ? '' : 's'} (abastecimentos e outras despesas) serão eliminados. Não dá para desfazer.` : 'Não dá para desfazer.';
       if (await askConfirm({ title: 'Eliminar este veículo?', text: msg, ok: 'Eliminar', danger: true, icon: 'trash' })) {
-        p.vehicles = p.vehicles.filter(v => v.id !== vid); p.spends = p.spends.filter(s => s.veh !== vid);
+        p.vehicles = p.vehicles.filter(v => v.id !== vid); p.spends = p.spends.filter(s => s.veh !== vid); p.carFix = p.carFix.filter(c => c.veh !== vid); p.shopRems = p.shopRems.filter(r => r.veh !== vid);
         ui.fuelVeh = null; saveDB(); closeSheet(); render(); toast('Veículo eliminado');
       }
       break;
@@ -3267,18 +3757,18 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
     }
     case 'save-fuel': {                                               // versão detalhada: litros e km obrigatórios
       const amount = parseAmount($('#g-amount').value), liters = parseAmount($('#g-liters').value);
-      const km = parseInt($('#g-km').value, 10), date = $('#g-date').value;
+      const kmRaw = $('#g-km').value.trim(), km = kmRaw ? parseInt(kmRaw, 10) : 0, date = $('#g-date').value;
       if (!(amount > 0)) return toast('Indica o valor pago');
       if (!(liters > 0)) return toast('Indica os litros abastecidos');
-      if (!(km > 0)) return toast('Indica os quilómetros do conta-quilómetros');
+      if (kmRaw && !(km > 0)) return toast('Os quilómetros têm de ser um número');
       if (!date) return toast('Indica a data');
       if (date < $('#g-date').min) return toast('Só podes registar a partir do início deste mês');
       const others = p.spends.filter(s => isFuel(s) && s.veh === ui.sheetVeh && s.id !== ui.editId);   // os km são de cada veículo
       const before = others.filter(s => s.date <= date).map(s => s.km), after = others.filter(s => s.date > date).map(s => s.km);
-      if (before.length && km <= Math.max(...before)) return toast(`Os km têm de ser superiores a ${nf(Math.max(...before), 0)} (registo anterior deste veículo)`);
-      if (after.length && km >= Math.min(...after)) return toast(`Os km têm de ser inferiores a ${nf(Math.min(...after), 0)} (registo seguinte deste veículo)`);
-      const data = { amount, cat: 'fuel', date, note: $('#g-note').value.trim(), liters, km, full: ui.sheetFull, veh: ui.sheetVeh };
-      if (ui.editId) Object.assign(p.spends.find(s => s.id === ui.editId), data); else p.spends.push({ id: uid(), ...data });
+      if (km && before.length && km <= Math.max(...before)) return toast(`Os km têm de ser superiores a ${nf(Math.max(...before), 0)} (registo anterior deste veículo)`);
+      if (km && after.length && km >= Math.min(...after)) return toast(`Os km têm de ser inferiores a ${nf(Math.min(...after), 0)} (registo seguinte deste veículo)`);
+      const data = { amount, cat: 'fuel', date, note: $('#g-note').value.trim(), liters, km: km || undefined, full: ui.sheetFull, veh: ui.sheetVeh };
+      if (ui.editId) { const o = p.spends.find(s => s.id === ui.editId); Object.assign(o, data); if (!km) delete o.km; } else p.spends.push({ id: uid(), ...data });
       saveDB(); closeSheet(); render(); toast('Abastecimento registado'); break;
     }
     case 'del-spend':
