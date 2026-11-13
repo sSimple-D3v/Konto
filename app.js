@@ -26,6 +26,8 @@ function migrateProfile(p) {
   p.bills.forEach(b => { b.created ||= now; });
   p.carFix = Array.isArray(p.carFix) ? p.carFix : [];                   // pagamentos fixos do automóvel (seguro, IUC…)
   p.carFix.forEach(c => { c.created ||= now; });
+  p.incomes = Array.isArray(p.incomes) ? p.incomes : [];                 // ordenados (o que entra), para saber quanto resta
+  p.incomes.forEach(i => { i.created ||= now; });
   p.shopRems = Array.isArray(p.shopRems) ? p.shopRems : [];            // lembretes das outras despesas do carro (óleo, pneus, inspeção…)
   p.vehicles = Array.isArray(p.vehicles) ? p.vehicles : [];             // veículos do combustível
   const legacyFuel = p.spends.filter(s => s.cat === 'fuel' && s.liters > 0 && !s.veh);   // abastecimentos de antes de haver veículos
@@ -274,6 +276,7 @@ const CLASSIC_CARD = ['pixel', 'aurora', 'grid', 'conic'];       // estilos "nor
 const classicCardMotion = t => !!t.cardStyle && !!t.anim && !ALWAYS_ANIM.includes(t.style) && CLASSIC_CARD.includes(t.style) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
 const FOOT_KINDS = ['bars', 'linechart'];      // nos cartões não ficam bem a ocupar tudo: têm o seu próprio "rodapé suave" (faixa em baixo, esbatida), sobre o gradiente normal do cartão
 /* Fila de pontos no fundo de um cartão de total: [[valor, legenda], …]. Cada cartão mostra primeiro o que mais importa (o número grande) e só depois estes. */
+const eq = n => '= ' + nf(n) + ' €';                  // valores equivalentes ou médias (por ano, por mês, por dia): levam "=" em vez do sinal de gasto
 const btStats = items => `<div class="bt-stats">${items.filter(Boolean).map(([v, l]) => `<div><strong>${v}</strong><em>${l}</em></div>`).join('')}</div>`;
 /* Néon nos cartões: uma linha fina no rodapé, com feixes de luz. Cada ciclo sorteia uma de quatro variações (sem repetir a anterior):
    vai e volta com ritmos diferentes · cor e largura que mudam · dois feixes que se cruzam · tudo sorteado (direção, velocidade, pausa, faísca). */
@@ -527,7 +530,7 @@ function applyTheme(t, opts = {}) {
 /* Módulos que o utilizador pode escolher gerir. */
 const MODULES = [
   { id: 'subs',  icon: 'subs',  name: 'Subscrições',        short: 'Subscrições', desc: 'Streaming, apps, serviços recorrentes', ready: true },
-  { id: 'spend', icon: 'spend', name: 'Gastos do dia a dia', short: 'Gastos',      desc: 'Para gastos diários', ready: true },
+  { id: 'spend', icon: 'spend', name: 'Gastos do dia a dia', short: 'Dia-a-dia',   desc: 'Para gastos diários', ready: true },
   { id: 'fuel',  icon: 'car',   name: 'Automóvel', short: 'Automóvel', desc: 'Combustível, outras despesas, lembretes e custo por km', ready: true },
   { id: 'vices', icon: 'vices', name: 'Vícios', short: 'Vícios', desc: 'Sem julgamentos: Todos temos algum…', ready: true },
   { id: 'house', icon: 'home',  name: 'Casa', short: 'Casa',    desc: 'Renda, luz, água, internet… com faturas reais', ready: true },
@@ -818,7 +821,7 @@ const BILL_TYPES = [
   { id: 'net',       name: 'Internet e TV', icon: 'wifi',     color: '#8b5cf6', variable: false },
   { id: 'condo',     name: 'Condomínio',    icon: 'building', color: '#14b8a6', variable: false },
   { id: 'insurance', name: 'Seguro',        icon: 'shield',   color: '#10b981', variable: false },
-  { id: 'other',     name: 'Outro',         icon: 'other',    color: '#8b93a3', variable: false },
+  { id: 'other',     name: 'Outros',        icon: 'other',    color: '#8b93a3', variable: false },
 ];
 const billTypeOf = id => BILL_TYPES.find(t => t.id === id) || BILL_TYPES[BILL_TYPES.length - 1];
 function billReals(p, b) {                                   // faturas reais registadas, da mais antiga para a mais recente
@@ -1160,7 +1163,9 @@ function vHome(p) {
       <h1>${esc(p.name)}</h1>
       <p>${p.handle ? `<span class="handle">@${esc(p.handle)}</span> · ` : ''}${n ? `${n} gasto${n === 1 ? '' : 's'} este mês` : 'Ainda sem gastos registados'}</p>
     </div>
+    <div id="resta">${restaHTML(p)}</div>
     <div id="summary">${summaryHTML(p)}</div>
+    <div id="medias">${mediasHTML(p)}</div>
     ${nudge}${rem}
     <div id="calendar"></div>
   </section>`;
@@ -1175,7 +1180,7 @@ function summaryHTML(p) {
   if (cas.loss > 0) by.casino = cas.loss;
   const rows = Object.entries(by).sort((a, b) => b[1] - a[1]);
   const bar = rows.length ? `<div class="stackbar">${rows.map(([c, v]) => `<i style="width:${v / total * 100}%;background:${catOf(c).color}"></i>`).join('')}</div>` : '';
-  const legend = rows.map(([c, v]) => `<div class="lg"><i style="background:${catOf(c).color}"></i><span>${ico(catOf(c).icon)} ${catOf(c).name}</span><b>${cost(v)}</b></div>`).join('');
+  const legend = rows.map(([c, v]) => `<div class="lg"><i style="background:${catOf(c).color}"></i><span>${ico(catOf(c).icon)} ${catOf(c).name}${c === 'other' ? ' <span class="muted small">(Dia-a-dia)</span>' : ''}</span><b>${cost(v)}</b></div>`).join('');
   const casinoGain = cas.gain > 0 ? `<div class="lg"><i style="background:var(--good)"></i><span>${ico('dice')} Casino</span><b class="pos">+${nf(cas.gain)} €</b></div>` : '';
 
   const t = today0();
@@ -1209,66 +1214,173 @@ function countUp(el, from) {                       // o total "corre" do valor a
   };
   requestAnimationFrame(step);
 }
+/* ── Quanto resta: de ordenado a ordenado ──
+   O ciclo vai do último ordenado até ao dia antes do próximo (Hoje, Semana e Mês usam o ciclo; o Ano usa o ano de calendário).
+   O dia do ordenado é um dia fixo ou "o N-ésimo dia útil do fim do mês" (só conta de segunda a sexta; os feriados não são considerados).
+   Se o valor varia, a app pergunta quanto recebeste quando o dia passa; até lá usa o último valor real (dobrado nos meses dos subsídios). */
+const INCOME_DEFAULT = { name: '', amount: '', rule: 'bizend', day: 27, nth: 3, sub14: false, mFer: 6, mNat: 11, variable: false };
+const NTH_LABEL = ['', 'último', 'penúltimo', 'antepenúltimo'];
+const incomeName = i => i.name || 'Ordenado';
+function bizEndDate(y, m, nth) {                                    // nth: 1 = último dia útil do mês, 2 = penúltimo, 3 = antepenúltimo
+  let n = 0;
+  for (let d = dim(y, m); d >= 1; d--) { const wd = new Date(y, m, d).getDay(); if (wd !== 0 && wd !== 6 && ++n === nth) return new Date(y, m, d); }
+}
+const payDate = (i, y, m) => i.rule === 'bizend' ? bizEndDate(y, m, i.nth || 3) : new Date(y, m, Math.min(i.day || 1, dim(y, m)));
+const isSubMonth = (i, m1) => !!i.sub14 && (m1 === i.mFer || m1 === i.mNat);          // m1 = mês de 1 a 12
+function incomeBase(p, i, ym) {                                      // o valor "normal": o último valor real de um mês sem subsídio; sem ele, o valor do ordenado
+  const regs = billReals(p, i).filter(r => r.ym < ym && !isSubMonth(i, +r.ym.slice(5)));
+  return regs.length ? regs[regs.length - 1].v : priceAt(i, ym);
+}
+function incomeEstimate(p, i, ym) { return incomeBase(p, i, ym) * (isSubMonth(i, +ym.slice(5)) ? 2 : 1); }
+function payEvents(p, from, to) {                                    // os ordenados que caem entre duas datas
+  const out = [], k0 = from.getFullYear() * 12 + from.getMonth() - 1, k1 = to.getFullYear() * 12 + to.getMonth() + 1;
+  for (const i of p.incomes) for (let k = k0; k <= k1; k++) {
+    const d = payDate(i, Math.floor(k / 12), k % 12); if (d < from || d > to) continue;
+    const ym = ymOf(d), real = p.billLog[`${i.id}:${ym}`];
+    out.push({ inc: i, date: d, ym, real: real !== undefined, v: real ?? incomeEstimate(p, i, ym) });
+  }
+  return out.sort((a, b) => a.date - b.date);
+}
+function cycleOf(p, t) {                                             // o ciclo do primeiro ordenado: do último pagamento até ao dia antes do próximo
+  const a = p.incomes[0], k0 = t.getFullYear() * 12 + t.getMonth(); let start = null, next = null;
+  for (let k = k0 - 1; k <= k0 + 1; k++) { const d = payDate(a, Math.floor(k / 12), k % 12); if (d <= t) start = d; else if (!next) next = d; }
+  return { start, next, end: new Date(next.getFullYear(), next.getMonth(), next.getDate() - 1) };
+}
+function spentBetween(p, from, to) {                                // o que já saiu (o casino conta pelo saldo do período)
+  const cas = casinoNet(p, ymd(from), ymd(to));
+  return entriesBetween(p, from, to).filter(e => !isCasinoEntry(e)).reduce((a, e) => a + e.amount, 0) + cas.loss;
+}
+function restaInfo(p) {
+  const t = today0(), y = t.getFullYear(), year = ui.period === 'year', tom = afterToday();
+  let start, end, next = null;
+  if (year) { start = new Date(y, 0, 1); end = new Date(y, 11, 31); }
+  else { const c = cycleOf(p, t); start = c.start; end = c.end; next = c.next; }
+  const income = payEvents(p, start, end).filter(e => !year || e.date.getFullYear() * 12 + e.date.getMonth() >= startIndex(e.inc)).reduce((a, e) => a + e.v, 0);
+  const spent = spentBetween(p, start, t), coming = tom <= end ? entriesBetween(p, tom, end).reduce((a, e) => a + e.amount, 0) : 0;
+  return { year, y, income, spent, coming, left: income - spent - coming, days: Math.round((end - t) / DAY) + 1, next };
+}
+function pendingIncomes(p) {                                        // ordenados de valor variável do ciclo atual que já caíram e ainda não têm o valor real
+  if (!p.incomes.length) return [];
+  const t = today0();
+  return payEvents(p, cycleOf(p, t).start, t).filter(e => e.inc.variable && !e.real);
+}
+const dayMon = d => `${d.getDate()} ${MESES[d.getMonth()].slice(0, 3)}`;
+function restaHTML(p) {
+  if (!p.incomes.length) return `<div class="card resta-empty"><p class="muted">Descobre quanto te resta até ao próximo ordenado.</p><button class="btn primary" data-act="add-income">Adicionar ordenado</button></div>`;
+  const r = restaInfo(p), full = Math.max(r.income, r.spent + r.coming, 1);
+  const pct = n => Math.max(0, Math.min(100, n / full * 100)).toFixed(1);
+  const neg = r.left < 0, perDay = r.days > 0 ? r.left / r.days : 0, pend = pendingIncomes(p);
+  const pendHTML = pend.length ? `<div class="card resta-pend">${pend.map(e => `<button class="item" data-act="invoice" data-id="${e.inc.id}:${e.ym}"><div class="ic" style="background:#10b981">${ico('spend')}</div>
+      <div class="grow"><b>Quanto recebeste em ${MESES[e.date.getMonth()]}?</b><span>${esc(incomeName(e.inc))} · estimativa ${nf(e.v)} €</span></div></button>`).join('')}</div>` : '';
+  return `${pendHTML}<div class="big-total resta-card">
+      <button class="rest-edit" data-act="income-menu" aria-label="Ordenado">${ico('edit')}</button>
+      <span>${r.year ? 'Resta em ' + r.y : 'Resta até ao próximo ordenado'}</span><b data-v="${r.left}">= ${nf(r.left)} €</b>
+      <div class="rbar2"><i class="g" style="width:${pct(r.spent)}%"></i><i class="p" style="width:${pct(r.coming)}%"></i></div>
+      ${btStats([[nf(r.income) + ' €', r.year ? 'ordenados' : 'recebido'], [cost(r.spent), 'gasto'], [cost(r.coming), 'por vir']])}
+    </div>
+    <div class="card resta-day">${neg
+      ? `<div class="rd-row"><span>Já passas o ordenado em</span><b class="neg">${nf(-r.left)} €</b></div>`
+      : `<div class="rd-row"><span>Podes gastar</span><b class="pos">≈ ${nf(perDay)} € por dia</b></div><div class="rd-row sub"><span>${r.year ? 'até ao fim do ano' : 'até ao próximo ordenado, a ' + dayMon(r.next)}</span><span>${r.days} dia${r.days === 1 ? '' : 's'}</span></div>`}</div>`;
+}
+function refreshResta() {
+  const box = document.getElementById('resta'), p = current(); if (!box || !p) return;
+  const prev = Number(box.querySelector('.big-total b')?.dataset.v) || 0;
+  swapBox(box, restaHTML(p));
+  countUp(box.querySelector('.big-total b'), prev);
+}
+const payText = i => i.rule === 'bizend' ? `${NTH_LABEL[i.nth || 3]} dia útil do mês` : `dia ${i.day}`;
+function incomeMenuSheet() {                                         // lista dos ordenados: tocar para editar, ou juntar outro
+  const p = current();
+  openSheet(`<h2>Ordenados</h2>
+    ${p.incomes.map(i => `<button class="item" data-act="edit-income" data-id="${i.id}"><div class="ic" style="background:#10b981">${ico('spend')}</div>
+      <div class="grow"><b>${esc(incomeName(i))}</b><span>${nf(curAmount(i))} € · ${payText(i)}${i.sub14 ? ' · subsídios' : ''}</span></div></button>`).join('')}
+    <div class="stack"><button class="btn primary" data-act="add-income">${ico('plus')} Adicionar ordenado</button></div>`);
+}
+function incomeSheet(inc) {
+  const s = inc || INCOME_DEFAULT;
+  ui.editId = inc?.id || null; ui.incSub = !!s.sub14; ui.incVar = !!s.variable; ui.incRule = s.rule || 'day';
+  const mon = (id, v) => `<select class="input" id="${id}">${MESES.map((n, k) => `<option value="${k + 1}" ${v === k + 1 ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
+  openSheet(`
+    <h2>${inc ? 'Editar ordenado' : 'Novo ordenado'}</h2>
+    <div class="field"><label>Nome (opcional)</label><input class="input" id="in-name" maxlength="30" placeholder="Ordenado" value="${esc(s.name)}"></div>
+    <div class="field"><label>Valor líquido (€) *</label><input class="input big" id="in-amount" inputmode="decimal" placeholder="0,00" value="${s.amount === '' ? '' : String(inc ? curAmount(inc) : s.amount).replace('.', ',')}">${inc && pricesText(inc) ? `<span class="hint">${pricesText(inc)}</span>` : ''}</div>
+    <div class="field"><label>Quando recebes</label>
+      <div class="chips"><button type="button" class="chip ${ui.incRule === 'day' ? 'on' : ''}" data-act="in-rule" data-v="day" style="--c:var(--accent)">Um dia fixo</button><button type="button" class="chip ${ui.incRule === 'bizend' ? 'on' : ''}" data-act="in-rule" data-v="bizend" style="--c:var(--accent)">Dia útil do fim do mês</button></div></div>
+    <div class="field" id="in-day-wrap" style="${ui.incRule === 'day' ? '' : 'display:none'}"><label>Dia do mês</label><input class="input" id="in-day" type="number" min="1" max="31" value="${s.day}"></div>
+    <div class="field" id="in-nth-wrap" style="${ui.incRule === 'bizend' ? '' : 'display:none'}"><label>Qual dia útil</label>
+      <select class="input" id="in-nth">${[1, 2, 3].map(n => `<option value="${n}" ${(s.nth || 3) === n ? 'selected' : ''}>${NTH_LABEL[n][0].toUpperCase() + NTH_LABEL[n].slice(1)} dia útil</option>`).join('')}</select>
+      <span class="hint">Conta de segunda a sexta. Os feriados não são considerados.</span></div>
+    <div class="switch-row" data-act="in-var"><div><b>O valor muda todos os meses</b><div class="hint">Quando o ordenado cai, a app pergunta quanto recebeste. Até lá usa o último valor.</div></div><div class="switch ${s.variable ? 'on' : ''}" id="in-var-switch"></div></div>
+    <div class="switch-row" data-act="in-sub"><div><b>Subsídios de férias e de Natal</b><div class="hint">Em dois meses do ano recebes mais ou menos o dobro</div></div><div class="switch ${s.sub14 ? 'on' : ''}" id="in-sub-switch"></div></div>
+    <div class="row2" id="in-sub-wrap" style="${s.sub14 ? '' : 'display:none'}">
+      <div class="field"><label>Mês do subsídio de férias</label>${mon('in-fer', s.mFer)}</div>
+      <div class="field"><label>Mês do subsídio de Natal</label>${mon('in-nat', s.mNat)}</div>
+    </div>
+    <div class="stack">
+      <button class="btn primary" data-act="save-income">Guardar</button>
+      ${inc ? '<button class="btn danger" data-act="del-income">Eliminar</button>' : ''}
+    </div>`);
+}
 function setPeriod(k, slide) {                    // slide = true só quando vem de um deslize; ao tocar nos botões o cartão fica no sítio
   const p = current(), old = PERIODS.findIndex(x => x[0] === ui.period), nu = PERIODS.findIndex(x => x[0] === k);
   if (!p || nu < 0 || old === nu) return;
   const prev = Number(document.querySelector('#summary .sum-total')?.dataset.v) || 0;
   const oldSeg = document.querySelector('#summary .seg'), ox = oldSeg?.style.getPropertyValue('--sx'), ow = oldSeg?.style.getPropertyValue('--sw');
-  ui.period = k; $('#summary').innerHTML = summaryHTML(p);
+  ui.period = k; $('#summary').innerHTML = summaryHTML(p); refreshResta();
   const newSeg = document.querySelector('#summary .seg');
   if (newSeg && ox) { newSeg.style.setProperty('--sx', ox); newSeg.style.setProperty('--sw', ow); newSeg.classList.add('ready'); void newSeg.offsetWidth; }   // parte da posição antiga: o destaque desliza até à nova
   const card = document.querySelector('#summary .summary');
   if (slide) card.classList.add(nu > old ? 'from-r' : 'from-l');
   countUp(card.querySelector('.sum-total'), prev);
 }
-/* O mesmo para a visão geral dos Vícios (#vsummary): muda de período com deslize, total a "correr", barra a crescer e linhas a entrar. */
-function refreshVSummary(p, dir) {                  // dir: +1 / -1 = mudou de período (anima); sem dir = só atualiza (+1 / −1 num hábito)
-  const box = document.getElementById('vsummary'); if (!box) return;
-  const prev = Number(box.querySelector('.big-total b')?.dataset.v) || 0;
+/* Troca o conteúdo de uma caixa que tem um cartão grande (#vsummary, #subsbox) sem recriar o cartão: as camadas do estilo (medusas, algas, barras…)
+   não são apagadas e a animação continua sem voltar ao início; o destaque do seletor desliza do botão antigo para o novo. */
+function swapBox(box, html) {
   const oldSeg = box.querySelector('.seg'), ox = oldSeg?.style.getPropertyValue('--sx'), ow = oldSeg?.style.getPropertyValue('--sw');
-  box.classList.remove('slide-r', 'slide-l', 'edge-l', 'edge-r');
-  /* O cartão grande fica no mesmo sítio: só se troca o conteúdo. Assim as camadas do estilo (medusas, algas, barras…) não são apagadas
-     nem recriadas, e a animação continua sem voltar ao início ao mudar de período. */
   const bt = box.querySelector('.big-total'), keep = bt ? [...bt.querySelectorAll(':scope > .cv-card, :scope > .cv-drift')] : [];
-  const tpl = document.createElement('template'); tpl.innerHTML = vSummaryHTML(p);
+  const tpl = document.createElement('template'); tpl.innerHTML = html;
   const nbt = tpl.content.querySelector('.big-total');
   if (bt && nbt && keep.length) {
     [...bt.children].forEach(c => { if (!keep.includes(c)) c.remove(); });
     bt.append(...nbt.childNodes); nbt.remove();
     [...box.children].forEach(c => { if (c !== bt) c.remove(); });
     box.append(tpl.content);
-  } else box.innerHTML = vSummaryHTML(p);
+  } else box.innerHTML = html;
   const seg = box.querySelector('.seg');
   if (seg && ox) { seg.style.setProperty('--sx', ox); seg.style.setProperty('--sw', ow); seg.classList.add('ready'); void seg.offsetWidth; }
-  if (dir) { void box.offsetWidth; box.classList.add(dir > 0 ? 'slide-r' : 'slide-l'); }
-  syncAnims();                                                       // o cartão novo continua o movimento de onde ia (não salta para o início)
+  syncAnims();
+}
+/* Visão geral dos Vícios (#vsummary): muda de período só ao tocar em Hoje / Semana / Mês / Ano (sem deslizar o cartão); o total "corre" até ao valor novo. */
+function refreshVSummary(p) {                       // chamado ao mudar de período e a cada +1 / −1 num hábito
+  const box = document.getElementById('vsummary'); if (!box) return;
+  const prev = Number(box.querySelector('.big-total b')?.dataset.v) || 0;
+  swapBox(box, vSummaryHTML(p));
   countUp(box.querySelector('.big-total b'), prev);
 }
-function setVPeriod(k, slide) {
+function setVPeriod(k) {
   const p = current(), old = PERIODS.findIndex(x => x[0] === ui.vperiod), nu = PERIODS.findIndex(x => x[0] === k);
   if (!p || nu < 0 || old === nu) return;
-  ui.vperiod = k; refreshVSummary(p, slide ? (nu > old ? 1 : -1) : 0);
+  ui.vperiod = k; refreshVSummary(p);
 }
-function swipePeriod(dir, v) {                      // dir: +1 = próximo (deslizar para a esquerda), -1 = anterior; v: visão geral dos Vícios
-  const cur = v ? ui.vperiod : ui.period, i = PERIODS.findIndex(x => x[0] === cur) + dir;
-  if (i >= 0 && i < PERIODS.length) return v ? setVPeriod(PERIODS[i][0], true) : setPeriod(PERIODS[i][0], true);
-  const card = document.querySelector(v ? '#vsummary' : '#summary .summary');     // já está no fim: um pequeno "abanão"
+function swipePeriod(dir) {                         // dir: +1 = próximo (deslizar para a esquerda), -1 = anterior (só o resumo do Início)
+  const i = PERIODS.findIndex(x => x[0] === ui.period) + dir;
+  if (i >= 0 && i < PERIODS.length) return setPeriod(PERIODS[i][0], true);
+  const card = document.querySelector('#summary .summary');                       // já está no fim: um pequeno "abanão"
   if (card) { card.classList.remove('edge-l', 'edge-r', 'slide-r', 'slide-l'); void card.offsetWidth; card.classList.add(dir > 0 ? 'edge-l' : 'edge-r'); }
 }
 // Deslizar entre períodos em tempo real: o cartão acompanha o dedo (com resistência no fim da lista) e, ao largar, ou muda de período ou volta ao sítio.
 let swipe0 = null, swipedAt = 0;
-const swipeCardOf = v => document.querySelector(v ? '#vsummary' : '#summary .summary');
-const swipeValid = (dir, v) => { const i = PERIODS.findIndex(x => x[0] === (v ? ui.vperiod : ui.period)) + dir; return i >= 0 && i < PERIODS.length; };
+const swipeCard = () => document.querySelector('#summary .summary');
+const swipeValid = dir => { const i = PERIODS.findIndex(x => x[0] === ui.period) + dir; return i >= 0 && i < PERIODS.length; };
 const swipeBack = c => {
   if (!c) return;
   c.style.transition = 'transform .38s cubic-bezier(.2, .8, .2, 1), opacity .38s ease'; c.style.transform = ''; c.style.opacity = '';
   setTimeout(() => { if (c.isConnected) c.style.transition = ''; }, 420);
 };
 document.addEventListener('touchstart', e => {
-  const t = e.touches.length === 1 && e.target.closest?.('#summary .summary, #vsummary .big-total');
+  const t = e.touches.length === 1 && e.target.closest?.('#summary .summary');
   if (!t || e.target.closest('button, a, input, select, .seg')) { swipe0 = null; return; }       // quem toca nos botões (Hoje, Semana…) não agarra o cartão
-  const v = !!t.closest('#vsummary');
-  swipe0 = { x: e.touches[0].clientX, y: e.touches[0].clientY, v, c: swipeCardOf(v), lock: null };
+  swipe0 = { x: e.touches[0].clientX, y: e.touches[0].clientY, c: swipeCard(), lock: null };
 }, { passive: true });
 document.addEventListener('touchmove', e => {
   if (!swipe0) return;
@@ -1277,7 +1389,7 @@ document.addEventListener('touchmove', e => {
     if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.3) swipe0.lock = 'h'; else if (Math.abs(dy) > 10) swipe0.lock = 'v';
   }
   if (swipe0.lock !== 'h' || !swipe0.c) return;
-  const off = Math.max(-140, Math.min(140, dx * (swipeValid(dx < 0 ? 1 : -1, swipe0.v) ? .8 : .25)));
+  const off = Math.max(-140, Math.min(140, dx * (swipeValid(dx < 0 ? 1 : -1) ? .8 : .25)));
   swipe0.c.style.transition = 'none'; swipe0.c.style.transform = `translateX(${off}px)`; swipe0.c.style.opacity = String(1 - Math.min(.35, Math.abs(off) / 300));
 }, { passive: true });
 document.addEventListener('touchend', e => {
@@ -1286,9 +1398,9 @@ document.addEventListener('touchend', e => {
   if (s.lock !== 'h') return;
   swipedAt = Date.now();
   const dir = dx < 0 ? 1 : -1;
-  if (Math.abs(dx) >= 48 && Math.abs(dx) >= Math.abs(dy) * 1.5 && swipeValid(dir, s.v)) {
+  if (Math.abs(dx) >= 48 && Math.abs(dx) >= Math.abs(dy) * 1.5 && swipeValid(dir)) {
     if (s.c) { s.c.style.transition = ''; s.c.style.transform = ''; s.c.style.opacity = ''; }
-    swipePeriod(dir, s.v);
+    swipePeriod(dir);
   } else swipeBack(s.c);                                                           // curto demais, ou já no fim: volta ao sítio
 }, { passive: true });
 document.addEventListener('touchcancel', () => { if (swipe0?.lock === 'h') swipeBack(swipe0.c); swipe0 = null; }, { passive: true });
@@ -1342,7 +1454,7 @@ function vCalendar(p) {
     }
     const inYear = spendOf(p, yearGroups.flatMap(g => g.list), `${y}-01-01`, dstr(upTo));
     const monthSpend = g => spendOf(p, g.list, `${y}-${pad(g.mm + 1)}-01`, g.mm < m ? `${y}-${pad(g.mm + 1)}-${pad(dim(y, g.mm))}` : dstr(upTo));
-    const srcOf = e => e.kind === 'sub' ? 'Subscrições' : e.kind === 'bill' ? 'Casa' : e.kind === 'carfix' || e.cat === 'fuel' || e.cat === 'shop' ? 'Automóvel' : e.kind === 'habit' ? 'Vícios' : 'Gastos';      // de que separador vem cada linha
+    const srcOf = e => e.kind === 'sub' ? 'Subscrições' : e.kind === 'bill' ? 'Casa' : e.kind === 'carfix' || e.cat === 'fuel' || e.cat === 'shop' ? 'Automóvel' : e.kind === 'habit' ? 'Vícios' : 'Dia-a-dia';      // de que separador vem cada linha
     const hline = e => `<div class="hline"><i style="background:${catOf(e.cat === 'fuel' ? 'shop' : e.cat).color}"></i><span class="d">${e.day}</span><span class="n"><span class="nm">${esc(e.name)}</span><small class="src">${srcOf(e)}</small></span><b class="${e.gain > 0 ? 'pos' : ''}">${amtText(e)}</b></div>`;
     const openM = ui.cal.open === 'month', openY = ui.cal.open === 'year';
     summary = `<button class="total hist-toggle" data-act="toggle-hist" data-v="month" aria-expanded="${openM}">
@@ -1429,31 +1541,43 @@ function subRow(s) {
   </button>`;
 }
 
+/* Subscrições: um separador por periodicidade da cobrança (Mês, 2 meses, Trimestral, Semestral, Anual).
+   Cada período tem o seu número grande: nos mensais é o total por mês; nos outros, o que se paga de cada vez, com os equivalentes por baixo. */
+const SUB_TABS = [['month', 'Mês'], ['bimonth', '2 meses'], ['quarter', 'Trim.'], ['semester', 'Sem.'], ['year', 'Ano']];
+const SUB_LABEL = { month: 'Todos os meses', bimonth: 'De 2 em 2 meses', quarter: 'A cada trimestre', semester: 'A cada semestre', year: 'Por ano' };
+const subPeriodOf = s => FREQ[s.period] ? s.period : 'month';
+function subsBoxHTML(p) {
+  const k = SUB_TABS.some(t => t[0] === ui.sper) ? ui.sper : 'month';
+  const from = afterToday(), list = p.subs.filter(s => subPeriodOf(s) === k).sort((a, b) => nextCharge(a, from) - nextCharge(b, from));
+  const ev = FREQ[k].every, per = list.reduce((a, s) => a + curAmount(s), 0), nx = list[0] && nextCharge(list[0], from);
+  const count = [list.length, list.length === 1 ? 'subscrição' : 'subscrições'], next = [nx ? `${nx.getDate()} ${MESES[nx.getMonth()].slice(0, 3)}` : '—', 'próxima'];
+  const stats = k === 'month' ? [[eq(per * 12), 'por ano'], count, next] : k === 'year' ? [[eq(per / 12), 'por mês'], count, next] : [[eq(per / ev), 'por mês'], [eq(per * 12 / ev), 'por ano'], next];
+  return `<div class="big-total">
+      <div class="seg five on-grad">${SUB_TABS.map(([id, l]) => `<button data-act="sper-sum" data-v="${id}" class="${k === id ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <span>${SUB_LABEL[k]}</span><b data-v="${per}">${cost(per)}</b>
+      ${btStats(stats)}
+    </div>
+    ${p.subs.length ? (list.length ? `<div class="card"><div class="card-h"><h3>${SUB_LABEL[k]}</h3><span class="muted small">${list.length}</span></div>${list.map(subRow).join('')}</div>`
+      : `<div class="card"><div class="empty-state"><div class="emoji">${ico('subs')}</div>Sem subscrições neste período.</div></div>`)
+      : `<div class="card"><div class="empty-state"><div class="emoji">${ico('subs')}</div>Ainda não tens subscrições.<br>Toca em <b>+</b> para adicionar a primeira.</div></div>`}`;
+}
+function refreshSubs() {                            // muda de período no sítio, sem recriar o cartão
+  const box = document.getElementById('subsbox'); if (!box) return render();
+  const prev = Number(box.querySelector('.big-total b')?.dataset.v) || 0;
+  swapBox(box, subsBoxHTML(current()));
+  countUp(box.querySelector('.big-total b'), prev);
+}
 function vSubs(p) {
-  const sorted = p.subs.slice().sort((a, b) => a.name.localeCompare(b.name));
-  const monthly = sorted.filter(s => everyOf(s) === 1), others = sorted.filter(s => everyOf(s) > 1);
-  const monthlyTotal = monthly.reduce((a, s) => a + curAmount(s), 0);                              // o que sai todos os meses
-  const othersYear = others.reduce((a, s) => a + curAmount(s) * 12 / everyOf(s), 0);               // anuais, trimestrais…: por ano
   return `<section class="screen">
     <h1 class="page-title">Subscrições</h1>
-    <div class="big-total" style="margin-top:16px">
-      <span>Todos os meses</span><b>${cost(monthlyTotal)}</b>
-      ${btStats([[cost(monthlyTotal * 12 + othersYear), 'por ano'], others.length ? [cost(othersYear), 'anuais e outras'] : null, [p.subs.length, p.subs.length === 1 ? 'subscrição' : 'subscrições']])}
-    </div>
-    ${p.subs.length ? '' : `<div class="card"><div class="empty-state"><div class="emoji">${ico('subs')}</div>Ainda não tens subscrições.<br>Toca em <b>+</b> para adicionar a primeira.</div></div>`}
-    ${monthly.length ? `<div class="card"><div class="card-h"><h3>Todos os meses</h3><span class="muted small">${monthly.length}</span></div>
-      ${monthly.map(subRow).join('')}
-      <div class="total"><span>Gastos mensais</span><span class="neg">${cost(monthlyTotal)}</span></div></div>` : ''}
-    ${others.length ? `<div class="card"><div class="card-h"><h3>Anuais e outras frequências</h3><span class="muted small">${others.length}</span></div>
-      ${others.map(subRow).join('')}
-      <div class="total"><span>Por ano</span><span class="neg">${cost(othersYear)}</span></div>
-      <p class="hint" style="margin-top:8px">Repartidas pelos 12 meses, dão ≈ ${cost(othersYear / 12)} por mês.</p></div>` : ''}  </section>`;
+    <div id="subsbox" style="margin-top:16px">${subsBoxHTML(p)}</div>
+  </section>`;
 }
 
 /* ── Combustível: preço por litro, tendência e consumo ── */
 const nf = (n, d = 2) => n.toLocaleString('pt-PT', { minimumFractionDigits: d, maximumFractionDigits: d });
 const isFuel = s => s.cat === 'fuel' && s.liters > 0 && s.km > 0;   // só conta com litros e km
-const VEHICLE_TYPES = [{ id: 'car', name: 'Carro', icon: 'car' }, { id: 'moto', name: 'Mota', icon: 'moto' }, { id: 'van', name: 'Carrinha', icon: 'car' }, { id: 'other', name: 'Outro', icon: 'fuel' }];
+const VEHICLE_TYPES = [{ id: 'car', name: 'Carro', icon: 'car' }, { id: 'moto', name: 'Mota', icon: 'moto' }, { id: 'van', name: 'Carrinha', icon: 'car' }, { id: 'other', name: 'Outros', icon: 'fuel' }];
 const vehTypeOf = id => VEHICLE_TYPES.find(t => t.id === id) || VEHICLE_TYPES[0];
 function fuelKmHint(vid, excludeId) {                        // "Último registo: 84 500 km" — os km são sempre de um veículo
   const k = Math.max(0, ...current().spends.filter(x => isFuel(x) && x.veh === vid && x.id !== excludeId).map(x => x.km));
@@ -1558,7 +1682,7 @@ const CAR_FIX_TYPES = [
   { id: 'insurance', name: 'Seguro', icon: 'shield',   color: '#0ea5e9', period: 'year', hint: 'Seguradora' },
   { id: 'tax',       name: 'IUC',    icon: 'building', color: '#14b8a6', period: 'year', hint: 'Imposto de circulação' },
   { id: 'leasing',   name: 'Leasing', icon: 'car',     color: '#8b5cf6', period: 'month', hint: 'Banco ou marca' },
-  { id: 'other',     name: 'Outro',  icon: 'other',    color: '#8b93a3', period: 'month', hint: 'Garagem, Via Verde…' },
+  { id: 'other',     name: 'Outros', icon: 'other',    color: '#8b93a3', period: 'month', hint: 'Garagem, Via Verde…' },
 ];
 const carFixTypeOf = id => CAR_FIX_TYPES.find(t => t.id === id) || CAR_FIX_TYPES[CAR_FIX_TYPES.length - 1];      // os lembretes sugeridos quando ainda não há nenhum
 const shopTypeOf = id => SHOP_ALL.find(t => t.id === id) || SHOP_ALL[SHOP_ALL.length - 1];
@@ -1666,7 +1790,7 @@ function shopBody(p) {
   const fxOthersYear = fxOthers.reduce((a, c) => a + billInfo(p, c).typical * 12 / everyOf(c), 0);
   return `<div class="big-total" style="margin-top:16px">
       <span>Gasto em ${MESES[t.getMonth()]}</span><b>${cost(month)}</b>
-      ${btStats([[cost(fxMonthly), 'por mês'], [cost(year), 'este ano'], [cost(fxMonthly * 12 + fxOthersYear), 'por ano']])}
+      ${btStats([[cost(fxMonthly), 'por mês'], [cost(year), 'este ano'], [eq(fxMonthly * 12 + fxOthersYear), 'por ano']])}
       ${cpk ? `<span class="bt-sub">Custo real: ${nf(cpk, 3)} €/km (com combustível)</span>` : ''}
     </div>
     ${vehChips}
@@ -2054,7 +2178,7 @@ function cafeCard(p, h) {
   const [ma, mb] = periodRange('month').map(ymd), cnt = {};
   recs.filter(r => r.date >= ma && r.date <= mb).forEach(r => { for (const id in r.by) cnt[id] = (cnt[id] || 0) + r.by[id]; });
   const topId = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0];
-  const topName = topId ? (h.types.find(x => x.id === topId)?.name || 'Outro') : null;
+  const topName = topId ? (h.types.find(x => x.id === topId)?.name || 'Outros') : null;
   const from30 = daysAgo(29), hrs = { m: 0, t: 0, n: 0 };                               // a que horas tomas (últimos 30 dias)
   recs.filter(r => r.date >= from30).forEach(r => { for (const b in r.hr) hrs[b] = (hrs[b] || 0) + r.hr[b]; });
   const totH = hrs.m + hrs.t + hrs.n;
@@ -2099,6 +2223,68 @@ function habitCardHTML(p, h) {
     : h.tpl === 'cafe' && typed ? cafeCard : h.tpl === 'alcool' && typed ? alcoolCard : genericCard)(p, h);
 }
 
+/* ── Médias ──  Nada é guardado: tudo se calcula na hora a partir dos registos.
+   A média de uma unidade (dia, semana, mês, ano) é o gasto médio dos períodos COMPLETOS já passados, desde o primeiro registo
+   (o período em que começaste, que ficou a meio, não conta); os períodos sem gastos contam como zero.
+   O período atual ainda vai a meio, por isso compara-se com a média na mesma proporção (a meio do mês, com metade da média do mês). */
+const AVG_UNITS = { day: ['dia', 'dias', 'por dia'], week: ['semana', 'semanas', 'por semana'], month: ['mês', 'meses', 'por mês'], year: ['ano', 'anos', 'por ano'] };
+function periodOf(unit, d) {                                         // [início, fim] do período (dia, semana de segunda a domingo, mês, ano) que contém d
+  const y = d.getFullYear(), m = d.getMonth();
+  if (unit === 'day') return [new Date(y, m, d.getDate()), new Date(y, m, d.getDate())];
+  if (unit === 'week') { const k = (d.getDay() + 6) % 7; return [new Date(y, m, d.getDate() - k), new Date(y, m, d.getDate() - k + 6)]; }
+  if (unit === 'month') return [new Date(y, m, 1), new Date(y, m + 1, 0)];
+  return [new Date(y, 0, 1), new Date(y, 11, 31)];
+}
+const nextPeriod = (unit, end) => new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1);      // o período seguinte começa no dia depois do fim
+const sumDays = (map, a, b) => { let t = 0; for (const d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) t += map[ymd(d)] || 0; return t; };
+function spendSource(p) {                                            // os gastos do Dia-a-dia: gasto por dia
+  const days = {}; let first = null;
+  for (const s of p.spends) { days[s.date] = (days[s.date] || 0) + s.amount; if (!first || s.date < first) first = s.date; }
+  return { first: first && parseYmd(first), valueIn: (a, b) => sumDays(days, a, b) };
+}
+function viceSource(p) {                                             // os vícios, com as mesmas regras do cartão: jogos sem reembolsos; o casino conta pelo saldo do período
+  const nc = {}, cn = {}; let first = null;
+  for (const h of p.habits) {
+    const cas = h.tpl === 'casino' && h.kind !== 'games';
+    for (const r of habitRecs(p, h)) {
+      if (!first || r.date < first) first = r.date;
+      if (cas) { const m = cn[h.id] ||= {}; m[r.date] = (m[r.date] || 0) + (r.won - r.spent); }
+      else nc[r.date] = (nc[r.date] || 0) + (h.kind === 'games' ? Math.max(0, r.spent - r.won) : r.spent);
+    }
+  }
+  return { first: first && parseYmd(first), valueIn: (a, b) => sumDays(nc, a, b) + Object.values(cn).reduce((t, m) => t + Math.max(0, -sumDays(m, a, b)), 0) };
+}
+function avgInfo(src, unit) {
+  const t = today0(), [s0, e0] = periodOf(unit, t), cur = src.valueIn(s0, t);
+  let n = 0, tot = 0;
+  if (src.first) {
+    let st = periodOf(unit, src.first)[0]; if (st < src.first) st = nextPeriod(unit, periodOf(unit, st)[1]);       // salta o período em que começaste
+    for (;; st = nextPeriod(unit, periodOf(unit, st)[1])) { const e = periodOf(unit, st)[1]; if (e >= t) break; tot += src.valueIn(st, e); n++; }
+  }
+  const frac = unit === 'day' ? 1 : (Math.round((t - s0) / DAY) + 1) / (Math.round((e0 - s0) / DAY) + 1);       // a parte do período que já passou
+  const avg = n ? tot / n : null, exp = avg === null ? null : avg * frac, diff = exp === null ? null : cur - exp;
+  return { cur, avg, n, exp, diff: diff !== null && Math.abs(diff) < .005 ? 0 : diff, proj: cur / frac };
+}
+const avgDiff = d => `<span class="${d > 0 ? 'up' : 'dn'}">${d > 0 ? '+' : '−'}${nf(Math.abs(d))} €</span>`;
+const avgBase = (n, unit) => n > 0 && n < 3 ? `<span class="bt-note">com base em ${n} ${AVG_UNITS[unit][n === 1 ? 0 : 1]}</span>` : '';       // histórico curto: avisa em quantos períodos se baseia
+function avgStats(ai, unit) {                                  // os dois primeiros pontos dos cartões: a média e a diferença para ela
+  const un = AVG_UNITS[unit][2];
+  if (ai.avg === null) return [['—', 'média ' + un], unit === 'year' && ai.cur > 0 ? [eq(ai.proj), 'projeção do ano'] : ['—', 'sem histórico']];
+  return [[eq(ai.avg), 'média ' + un], ai.diff === 0 ? ['na média', 'até agora'] : [avgDiff(ai.diff), ai.diff > 0 ? 'acima da média' : 'abaixo da média']];
+}
+const MED_TABS = [['day', 'Dia'], ['week', 'Semana'], ['month', 'Mês'], ['year', 'Ano']];
+function mediasHTML(p) {                                             // cartão do Início: o período atual de cada um, comparado com a sua média
+  const rows = [['spend', 'Dia-a-dia', spendSource], ['vices', 'Vícios', viceSource]].filter(([m]) => p.modules.includes(m));
+  if (!rows.length) return '';
+  const u = MED_TABS.some(x => x[0] === ui.mper) ? ui.mper : 'month';
+  return `<div class="card medias"><div class="seg four">${MED_TABS.map(([k, l]) => `<button data-act="mper-sum" data-v="${k}" class="${u === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="med-grid">${rows.map(([, name, src]) => {
+      const ai = avgInfo(src(p), u), pct = ai.exp > .004 ? Math.round(ai.diff / ai.exp * 100) : null;
+      const note = ai.avg === null ? '<div class="d">sem histórico</div>' : pct === null ? (ai.diff > 0 ? '<div class="d up">acima da média</div>' : '<div class="d">na média</div>')
+        : pct === 0 ? '<div class="d">na média</div>' : `<div class="d ${pct > 0 ? 'up' : 'dn'}">${pct > 0 ? '↑' : '↓'} ${Math.abs(pct)}% da média</div>`;
+      return `<div class="med-tile"><div class="t">${name}</div><b>${cost(ai.cur)}</b>${note}</div>`; }).join('')}</div></div>`;
+}
+
 /* Visão geral de todos os hábitos (como no Início): gasto por período e divisão por hábito.
  * Inclui também os hábitos escondidos do calendário, porque aqui é o espaço deles. */
 function vSummaryHTML(p) {
@@ -2117,18 +2303,16 @@ function vSummaryHTML(p) {
   const shown = rows.filter(r => r.spent > 0).sort((x, y) => y.spent - x.spent);
   const bar = shown.length ? `<div class="stackbar">${shown.map(r => `<i style="width:${r.spent / total * 100}%;background:${r.h.color}"></i>`).join('')}</div>` : '';
   const legend = shown.map(r => `<div class="lg"><i style="background:${r.h.color}"></i><span>${ico(r.h.icon)} ${esc(r.h.name)}</span><b>${cost(r.spent)}</b></div>`).join('');
-  const proj = p.habits.filter(h => h.kind !== 'games').map(h => habitStats(p, h).proj).filter(v => v !== null);   // compras de jogos não são periódicas
   const label = PERIODS.find(x => x[0] === ui.vperiod)[2];
-  const days = Math.max(1, Math.round((parseYmd(b) - parseYmd(a)) / DAY) + 1);                  // dias do período, para a média por dia
+  const ai = avgInfo(viceSource(p), ui.vperiod), count = [shown.length, shown.length === 1 ? 'hábito com gastos' : 'hábitos com gastos'];
   return `<div class="big-total">
       <div class="seg four on-grad">${PERIODS.map(([k, l]) => `<button data-act="vperiod-sum" data-v="${k}" class="${ui.vperiod === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <span>Visão geral · gasto ${label}</span><b data-v="${total}">${cost(total)}</b>
-      ${btStats([[cost(total / days), 'média por dia'], proj.length ? [cost(proj.reduce((x, v) => x + v, 0)), 'projeção anual'] : null, [shown.length, shown.length === 1 ? 'hábito com gastos' : 'hábitos com gastos']])}
+      ${btStats([...avgStats(ai, ui.vperiod), count])}${avgBase(ai.n, ui.vperiod)}
     </div>
     <div class="card">
       ${bar}${legend || '<p class="muted small">Sem gastos neste período.</p>'}
       ${won > 0 ? `<div class="coming"><span>Ganhos (à parte dos gastos)</span><b class="pos">+${nf(won)} €</b></div>` : ''}
-      ${proj.length ? `<p class="hint" style="margin-top:8px">A projeção anual usa os hábitos por unidade e valor.</p>` : ''}
     </div>`;
 }
 
@@ -2174,7 +2358,7 @@ function vHouse(p) {
     <h1 class="page-title">Casa</h1>
     <div class="big-total" style="margin-top:16px">
       <span>Todos os meses</span><b>${cost(monthlyTotal)}</b>
-      ${btStats([[cost(monthlyTotal * 12 + othersYear), 'por ano'], otherInfos.length ? [cost(othersYear), 'outras frequências'] : null, [p.bills.length, p.bills.length === 1 ? 'conta' : 'contas']])}
+      ${btStats([[eq(monthlyTotal * 12 + othersYear), 'por ano'], otherInfos.length ? [eq(othersYear), 'outras frequências'] : null, [p.bills.length, p.bills.length === 1 ? 'conta' : 'contas']])}
     </div>
     ${pendCard}
     ${p.bills.length ? '' : `<div class="card"><div class="empty-state"><div class="emoji">${ico('home')}</div>Ainda não tens contas de casa.<br>Toca em <b>+</b> para juntar a renda, a luz, a água…</div></div>`}
@@ -2198,6 +2382,7 @@ function vSpend(p) {
   const monthSpends = p.spends.filter(s => { const d = parseYmd(s.date); return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth(); });
   const total = monthSpends.filter(s => parseYmd(s.date) <= t).reduce((a, s) => a + s.amount, 0);
   const todaySum = monthSpends.filter(s => s.date === ymd(t)).reduce((a, s) => a + s.amount, 0);
+  const ai = avgInfo(spendSource(p), 'day');
   const days = [...new Set(monthSpends.map(s => s.date))].sort().reverse();
   const moreDays = days.length > ui.spendDays ? `<button class="more" data-act="more-spend">Ver mais dias (${days.length - ui.spendDays})</button>` : '';
   const groups = days.slice(0, ui.spendDays).map(day => {
@@ -2210,7 +2395,7 @@ function vSpend(p) {
     <h1 class="page-title">Gastos do dia a dia</h1>
     <div class="big-total" style="margin-top:16px">
       <span>Gasto em ${MESES[t.getMonth()]}</span><b>${cost(total)}</b>
-      ${btStats([[cost(todaySum), 'hoje'], [cost(total / t.getDate()), 'média por dia'], [monthSpends.length, monthSpends.length === 1 ? 'registo' : 'registos']])}
+      ${btStats([[cost(todaySum), 'hoje'], ...avgStats(ai, 'day')])}${avgBase(ai.n, 'day')}
     </div>
     ${groups ? groups + moreDays : `<div class="card"><div class="empty-state"><div class="emoji">${ico('spend')}</div>Ainda sem gastos este mês.<br>Toca em <b>+</b> sempre que gastares algo.</div></div>`}
     <p class="hint">Vê outros meses no calendário, no Início.</p>
@@ -2340,7 +2525,7 @@ function afterProfileRender() {
 }
 
 /* ── Cópias de segurança ── */
-const hasData = p => p.subs.length > 0 || p.spends.length > 0 || p.bills.length > 0 || p.carFix.length > 0 || Object.keys(p.hlog).length > 0;
+const hasData = p => p.incomes.length > 0 || p.subs.length > 0 || p.spends.length > 0 || p.bills.length > 0 || p.carFix.length > 0 || Object.keys(p.hlog).length > 0;
 const DAY = 864e5;
 function needsBackup(p) {      // lembrete suave: só com dados e passados 30 dias
   return hasData(p) && Date.now() - new Date(p.lastBackup || p.created).getTime() > 14 * DAY;
@@ -2468,7 +2653,7 @@ document.addEventListener('pointerup', endSheetDrag); document.addEventListener(
 function syncModalLock() { document.documentElement.classList.toggle('modal-open', !!document.querySelector('#sheet-root .overlay, .dlg-overlay:not(.out)')); }
 
 function subSheet(sub) {
-  const s = sub || { name: '', amount: '', period: 'month', day: new Date().getDate(), month: new Date().getMonth() + 1, remind: false, remindDays: 3 };
+  const s = sub || { name: '', amount: '', period: SUB_TABS.some(t => t[0] === ui.sper) ? ui.sper : 'month', day: new Date().getDate(), month: new Date().getMonth() + 1, remind: false, remindDays: 3 };      // uma subscrição nova já vem com o período do separador aberto
   ui.sheetPeriod = s.period; ui.sheetRemind = s.remind; ui.editId = sub?.id || null; ui.subIcon = s.icon || '';
   const tiles = [['', 'Automático', 'A'], ['letter', 'Só a letra', 'Aa']].map(([v, l, t]) => `<button type="button" class="ic-tile txt ${ui.subIcon === v ? 'on' : ''}" data-act="sub-icon" data-v="${v}" title="${l}" aria-label="${l}">${t}</button>`)
     .concat(SUB_ICONS.map(([v, l]) => `<button type="button" class="ic-tile ${ui.subIcon === v ? 'on' : ''}" data-act="sub-icon" data-v="${v}" title="${l}" aria-label="${l}">${subIc(null, v, v)}</button>`))
@@ -2546,7 +2731,7 @@ function habitSheet(h) {
   openSheet(`
     <h2>${isNew ? 'Novo hábito' : 'Editar hábito'}</h2>
     ${isNew ? `<div class="field"><label>Começar por um modelo</label><div class="chips">${HABIT_TPLS.map(t =>
-      `<button class="chip ${ui.hTpl === t.id ? 'on' : ''}" data-act="h-tpl" data-v="${t.id}" style="--c:${t.color}">${ico(t.icon)} ${t.name || 'Outro'}</button>`).join('')}</div></div>` : ''}
+      `<button class="chip ${ui.hTpl === t.id ? 'on' : ''}" data-act="h-tpl" data-v="${t.id}" style="--c:${t.color}">${ico(t.icon)} ${t.name || 'Outros'}</button>`).join('')}</div></div>` : ''}
     <div class="field"><label>Nome</label><input class="input" id="h-name" maxlength="24" placeholder="Ex.: Tabaco" value="${esc(s.name)}"></div>
 
     <div id="hx-generic">
@@ -2721,20 +2906,23 @@ function priceFromSheet(item, newAmount) {
 }
 
 /* Valor real de uma fatura (contas variáveis). Sem ele, conta a estimativa. */
-function invoiceSheet(bid, ym) {
-  const p = current(), car = !p.bills.some(x => x.id === bid), b = (car ? p.carFix : p.bills).find(x => x.id === bid), real = p.billLog[`${bid}:${ym}`];
+function invoiceSheet(bid, ym) {                                       // valor real de um mês: fatura (Casa), pagamento fixo (Automóvel) ou ordenado
+  const p = current(), kind = p.bills.some(x => x.id === bid) ? 'bill' : p.carFix.some(x => x.id === bid) ? 'car' : 'inc';
+  const b = (kind === 'bill' ? p.bills : kind === 'car' ? p.carFix : p.incomes).find(x => x.id === bid), real = p.billLog[`${bid}:${ym}`];
   const [y, m] = ym.split('-').map(Number), prev = billReals(p, b).filter(r => r.ym < ym).pop();
+  const T = { bill: ['Fatura', 'Valor da fatura (€)', 'fatura anterior', 'Editar a conta', 'edit-bill'], car: ['Pagamento', 'Valor pago (€)', 'anterior', 'Editar o pagamento', 'edit-carfix'], inc: ['Ordenado', 'Valor recebido (€)', 'anterior', 'Editar o ordenado', 'edit-income'] }[kind];
+  const est = kind === 'inc' ? incomeEstimate(p, b, ym) : priceAt(b, ym);
   ui.inv = { bid, ym };
   openSheet(`
-    <h2>${car ? 'Pagamento' : 'Fatura'} · ${esc(b.name)}</h2>
+    <h2>${T[0]} · ${esc(kind === 'inc' ? incomeName(b) : b.name)}</h2>
     <p class="muted" style="margin:-10px 0 18px">${MESES[m - 1]} de ${y}</p>
-    <div class="field"><label>${car ? 'Valor pago (€)' : 'Valor da fatura (€)'}</label>
+    <div class="field"><label>${T[1]}</label>
       <input class="input big" id="i-amount" inputmode="decimal" placeholder="0,00" value="${real !== undefined ? String(real).replace('.', ',') : ''}">
-      <span class="hint">Estimativa: ${nf(priceAt(b, ym))} €${prev ? ` · ${car ? 'anterior' : 'fatura anterior'}: ${nf(prev.v)} €` : ''}</span></div>
+      <span class="hint">Estimativa: ${nf(est)} €${prev ? ` · ${T[2]}: ${nf(prev.v)} €` : ''}</span></div>
     <div class="stack">
       <button class="btn primary" data-act="save-invoice">Guardar</button>
       ${real !== undefined ? '<button class="btn danger" data-act="clear-invoice">Voltar à estimativa</button>' : ''}
-      <button class="btn ghost" data-act="${car ? 'edit-carfix' : 'edit-bill'}" data-id="${b.id}">${car ? 'Editar o pagamento' : 'Editar a conta'}</button>
+      <button class="btn ghost" data-act="${T[4]}" data-id="${b.id}">${T[3]}</button>
     </div>`);
 }
 
@@ -3186,7 +3374,7 @@ function wipe(fromEl, change, settleSel) {
 
 document.addEventListener('click', async e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
-  if (Date.now() - swipedAt < 400 && el.closest('#summary, #vsummary, .pager')) return;               // o fim de um deslize não conta como toque
+  if (Date.now() - swipedAt < 400 && el.closest('#summary, .pager')) return;               // o fim de um deslize não conta como toque
   const act = el.dataset.act, p = current();
   switch (act) {
     case 'start': wipe(el, () => go(db.profiles.length ? 'picker' : 'ask')); break;
@@ -3392,7 +3580,7 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
       saveDB(); closeSheet(); render(); toast('Conta guardada'); break;
     }
     case 'price-apply': case 'price-all': {                          // valor novo: a partir de um mês, ou corrigir desde sempre
-      const { kind, id, data } = ui.pend, item = (kind === 'sub' ? p.subs : kind === 'car' ? p.carFix : p.bills).find(x => x.id === id);
+      const { kind, id, data } = ui.pend, item = (kind === 'sub' ? p.subs : kind === 'car' ? p.carFix : kind === 'inc' ? p.incomes : p.bills).find(x => x.id === id);
       const { amount, ...rest } = data; Object.assign(item, rest);
       applyPriceChange(item, amount, act === 'price-all' ? null : $('#pf-from').value);
       ui.pend = null; saveDB(); closeSheet(); render(); toast('Guardado'); break;
@@ -3652,6 +3840,31 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
       refreshVSummary(p); break;                                         // a visão geral acompanha o +1 / −1
     }
     case 'vperiod-sum': setVPeriod(el.dataset.v); break;
+    case 'sper-sum': ui.sper = el.dataset.v; refreshSubs(); break;
+    case 'mper-sum': { ui.mper = el.dataset.v; const box = document.getElementById('medias'); if (box) swapBox(box, mediasHTML(p)); break; }
+    case 'income-menu': p.incomes.length === 1 ? incomeSheet(p.incomes[0]) : incomeMenuSheet(); break;
+    case 'add-income': incomeSheet(); break;
+    case 'edit-income': incomeSheet(p.incomes.find(i => i.id === el.dataset.id)); break;
+    case 'in-sub': ui.incSub = !ui.incSub; $('#in-sub-switch').classList.toggle('on', ui.incSub); $('#in-sub-wrap').style.display = ui.incSub ? '' : 'none'; break;
+    case 'in-var': ui.incVar = !ui.incVar; $('#in-var-switch').classList.toggle('on', ui.incVar); break;
+    case 'in-rule':
+      ui.incRule = el.dataset.v; document.querySelectorAll('[data-act=in-rule]').forEach(c => c.classList.toggle('on', c === el));
+      $('#in-day-wrap').style.display = ui.incRule === 'day' ? '' : 'none'; $('#in-nth-wrap').style.display = ui.incRule === 'bizend' ? '' : 'none'; break;
+    case 'save-income': {
+      const amount = parseAmount($('#in-amount').value), day = Math.min(31, Math.max(1, parseInt($('#in-day').value, 10) || 0));
+      if (!(amount > 0)) return toast('Indica o valor');
+      if (ui.incRule === 'day' && !day) return toast('Indica o dia do pagamento');
+      const data = { name: $('#in-name').value.trim(), amount, rule: ui.incRule, day: day || 27, nth: +$('#in-nth').value, period: 'month', month: 1, sub14: ui.incSub, mFer: +$('#in-fer').value, mNat: +$('#in-nat').value, variable: ui.incVar };
+      if (ui.editId) {
+        const old = p.incomes.find(x => x.id === ui.editId);
+        if (Math.abs(amount - curAmount(old)) > 0.004) { ui.pend = { kind: 'inc', id: old.id, data }; return priceFromSheet(old, amount); }
+        const { amount: _same, ...rest } = data; Object.assign(old, rest);
+      } else p.incomes.push({ id: uid(), created: new Date().toISOString(), ...data });
+      saveDB(); closeSheet(); render(); toast('Guardado'); break;
+    }
+    case 'del-income':
+      if (await askConfirm({ title: 'Eliminar este ordenado?', text: 'Deixa de contar no quanto te resta. Não dá para desfazer.', ok: 'Eliminar', danger: true, icon: 'trash' })) { const iid = ui.editId; p.incomes = p.incomes.filter(x => x.id !== iid); for (const k of Object.keys(p.billLog)) if (k.startsWith(iid + ':')) delete p.billLog[k]; saveDB(); closeSheet(); render(); toast('Eliminado'); }
+      break;
     case 'habit-type': {                                               // café / álcool: um toque no tipo regista +1 desse tipo
       const h = p.habits.find(x => x.id === el.dataset.id), ty = h.types.find(x => x.id === el.dataset.t), k = hkey(h.id, ymd(today0()));
       const r = p.hlog[k] ||= { n: 0, spent: 0, won: 0 };

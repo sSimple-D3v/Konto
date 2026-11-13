@@ -245,7 +245,7 @@ img, svg { -webkit-user-drag: none; user-drag: none; }
 .item + .item { border-top: 1px solid var(--line); }
 .item .ic { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; font-weight: 700; color: #fff; flex: none; }
 .item .grow { flex: 1; min-width: 0; }
-.item .grow b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .grow b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }      /* nomes compridos: até duas linhas, e só depois reticências */
 .item .grow span { font-size: 13px; color: var(--muted); }
 .item .amt { font-weight: 700; }
 .total { display: flex; justify-content: space-between; padding-top: 16px; margin-top: 8px; border-top: 2px solid var(--line); font-weight: 800; font-size: 17px; }
@@ -413,8 +413,8 @@ img, svg { -webkit-user-drag: none; user-drag: none; }
 .h-rec span:nth-child(2) { flex: 1; color: var(--muted); }
 .nav.dense button { font-size: 10px; padding: 0 2px; }
 /* seletor de período dentro de um cartão com gradiente */
-.seg.on-grad { background: color-mix(in srgb, var(--on-grad) 16%, transparent); margin-bottom: 22px; }
-.seg.on-grad button { color: color-mix(in srgb, var(--on-grad) 72%, transparent); }
+.seg.on-grad { background: color-mix(in srgb, var(--on-grad-g, var(--on-grad)) 16%, transparent); margin-bottom: 22px; }
+.seg.on-grad button { color: color-mix(in srgb, var(--on-grad-g, var(--on-grad)) 72%, transparent); }
 .seg.on-grad button.on { background: transparent; color: #04130d; box-shadow: none; }
 #vsummary .stackbar { margin-top: 2px; }
 .h-goal { margin-bottom: 18px; }
@@ -527,6 +527,8 @@ img, svg { -webkit-user-drag: none; user-drag: none; }
 /* Resumo do Início */
 .seg.four { grid-template-columns: repeat(4, 1fr); margin-bottom: 26px; }
 .seg.four button { padding: 11px 4px; font-size: 14px; }
+.seg.five { grid-template-columns: repeat(5, 1fr); margin-bottom: 26px; }
+.seg.five button { padding: 11px 2px; font-size: 13px; }
 .sum-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 22px; }
 .sum-total { font-size: 34px; letter-spacing: -.02em; }
 .stackbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--surface-2); margin-bottom: 20px; gap: 2px; }
@@ -1084,10 +1086,40 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 46px; 
 
 /* Nos resumos: o nome da linha e, ao lado em cinzento, o separador de onde vem */
 .hline .n { display: flex; align-items: baseline; gap: 7px; }
-.hline .n .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hline .n { white-space: normal; overflow: visible; text-overflow: clip; }
+.hline .n .nm { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .hline .n .src { flex: none; color: var(--muted); font-size: 11px; }
 
 /* Medusas nos cartões: navegam da esquerda para a direita pela faixa de baixo (o fundo/capa mantém as medusas a subir) */
 .cv-card.cv-jelly .jf { bottom: 2px; left: -14%; animation-name: jcCross, jlPulse; }
 .cv-card.cv-jelly .jf:nth-child(2) { bottom: -6px; }
 @keyframes jcCross { 0% { left: -14%; opacity: 0; } 6% { opacity: var(--o); } 94% { opacity: var(--o); } 100% { left: 104%; opacity: 0; } }
+
+/* Quanto resta: cartão grande + cartão do "podes gastar por dia" */
+.resta-card { margin-top: 16px; }
+.resta-card .rest-edit { position: absolute; top: 14px; right: 14px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: inherit; background: color-mix(in srgb, currentColor 14%, transparent); z-index: 3; }
+.resta-card .rest-edit .i { width: 17px; height: 17px; vertical-align: baseline; }
+.rbar2 { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: color-mix(in srgb, currentColor 20%, transparent); margin: 8px 0 4px; }
+.rbar2 i { display: block; height: 100%; }
+.rbar2 .g { background: currentColor; opacity: .9; }
+.rbar2 .p { background: repeating-linear-gradient(135deg, currentColor 0 3px, transparent 3px 6px); opacity: .55; }
+.resta-day { margin-top: -4px; padding: 14px 18px; }
+.rd-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.rd-row b { font-size: 17px; }
+.rd-row.sub { margin-top: 2px; font-size: 13px; color: var(--muted); }
+.resta-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; margin-top: 16px; padding: 20px; }
+
+/* Médias: a diferença nos cartões grandes e o cartão "Médias" do Início */
+.big-total .bt-stats .up, .big-total .bt-stats .dn { display: inline-block; padding: 1px 8px; border-radius: 9px; font-weight: 700; color: #fff; text-shadow: none; }   /* etiquetas legíveis em qualquer fundo */
+.big-total .bt-stats .up { background: #dc2626; }
+.big-total .bt-stats .dn { background: #15803d; }
+.big-total .bt-note { display: block; font-size: 11px; font-weight: 500; opacity: .7; margin-top: 8px; }
+.medias { margin-bottom: 28px; }
+.medias .seg.four { margin-bottom: 14px; }
+.med-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.med-tile { background: var(--surface-2); border-radius: 14px; padding: 12px; }
+.med-tile .t { font-size: 13px; color: var(--muted); }
+.med-tile b { display: block; font-size: 19px; margin: 3px 0 2px; color: var(--danger); }
+.med-tile .d { font-size: 12px; font-weight: 600; color: var(--muted); }
+.med-tile .d.up { color: var(--danger); }
+.med-tile .d.dn { color: var(--good); }
