@@ -1123,3 +1123,11 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 46px; 
 .med-tile .d { font-size: 12px; font-weight: 600; color: var(--muted); }
 .med-tile .d.up { color: var(--danger); }
 .med-tile .d.dn { color: var(--good); }
+
+/* "+ Ganho" no cartão do resta */
+.resta-card .rest-add { position: absolute; top: 14px; right: 58px; height: 34px; padding: 0 14px; border-radius: 17px; display: inline-flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 700; color: inherit; background: color-mix(in srgb, currentColor 14%, transparent); z-index: 3; }
+.resta-card .rest-add .i { width: 15px; height: 15px; vertical-align: baseline; }
+.resta-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+/* O título do cartão do resta não passa por baixo dos botões do canto: quebra para a linha de baixo */
+.resta-card > span { display: block; padding-right: 138px; min-height: 34px; line-height: 1.25; }

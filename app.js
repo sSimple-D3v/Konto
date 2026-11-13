@@ -28,6 +28,8 @@ function migrateProfile(p) {
   p.carFix.forEach(c => { c.created ||= now; });
   p.incomes = Array.isArray(p.incomes) ? p.incomes : [];                 // ordenados (o que entra), para saber quanto resta
   p.incomes.forEach(i => { i.created ||= now; });
+  p.earnings = Array.isArray(p.earnings) ? p.earnings : [];               // ganhos avulsos ou diários ("+ Ganho")
+  p.earnCycle = p.earnCycle === 'week' ? 'week' : 'month';               // sem ordenado com dia certo, o "resta" conta o mês ou a semana
   p.shopRems = Array.isArray(p.shopRems) ? p.shopRems : [];            // lembretes das outras despesas do carro (óleo, pneus, inspeção…)
   p.vehicles = Array.isArray(p.vehicles) ? p.vehicles : [];             // veículos do combustível
   const legacyFuel = p.spends.filter(s => s.cat === 'fuel' && s.liters > 0 && !s.veh);   // abastecimentos de antes de haver veículos
@@ -1214,36 +1216,57 @@ function countUp(el, from) {                       // o total "corre" do valor a
   };
   requestAnimationFrame(step);
 }
-/* ── Quanto resta: de ordenado a ordenado ──
-   O ciclo vai do último ordenado até ao dia antes do próximo (Hoje, Semana e Mês usam o ciclo; o Ano usa o ano de calendário).
-   O dia do ordenado é um dia fixo ou "o N-ésimo dia útil do fim do mês" (só conta de segunda a sexta; os feriados não são considerados).
-   Se o valor varia, a app pergunta quanto recebeste quando o dia passa; até lá usa o último valor real (dobrado nos meses dos subsídios). */
-const INCOME_DEFAULT = { name: '', amount: '', rule: 'bizend', day: 27, nth: 3, sub14: false, mFer: 6, mNat: 11, variable: false };
+/* ── Quanto resta ──
+   Um rendimento recebe-se de uma de três maneiras: num dia do mês (fixo, ou "o N-ésimo dia útil do fim do mês"), num dia da semana, ou em ganhos soltos
+   ("+ Ganho": por dia, avulsos). Podem juntar-se. Com um ordenado, o ciclo vai do último pagamento até ao dia antes do próximo (Hoje, Semana e Mês usam o ciclo;
+   o Ano usa o ano de calendário). Só com ganhos soltos, o ciclo é o mês ou a semana, à escolha. Resta = o que entrou − o que já saiu − o que ainda vem.
+   Se o valor do ordenado varia, a app pergunta quanto recebeste quando o dia passa; até lá usa o último valor real (dobrado nos meses dos subsídios). */
+const INCOME_DEFAULT = { name: '', amount: '', rule: 'day', day: '', nth: 1, wday: 5, sub14: false, mFer: 6, mNat: 11, variable: false };
 const NTH_LABEL = ['', 'último', 'penúltimo', 'antepenúltimo'];
+const WDAY_NAMES = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
 const incomeName = i => i.name || 'Ordenado';
 function bizEndDate(y, m, nth) {                                    // nth: 1 = último dia útil do mês, 2 = penúltimo, 3 = antepenúltimo
   let n = 0;
   for (let d = dim(y, m); d >= 1; d--) { const wd = new Date(y, m, d).getDay(); if (wd !== 0 && wd !== 6 && ++n === nth) return new Date(y, m, d); }
 }
 const payDate = (i, y, m) => i.rule === 'bizend' ? bizEndDate(y, m, i.nth || 3) : new Date(y, m, Math.min(i.day || 1, dim(y, m)));
-const isSubMonth = (i, m1) => !!i.sub14 && (m1 === i.mFer || m1 === i.mNat);          // m1 = mês de 1 a 12
+function payDatesIn(i, from, to) {                                  // as datas em que um rendimento é pago entre duas datas
+  const out = [];
+  if (i.rule === 'weekly') {
+    const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    d.setDate(d.getDate() + ((i.wday - d.getDay() + 7) % 7));
+    for (; d <= to; d.setDate(d.getDate() + 7)) out.push(new Date(d));
+    return out;
+  }
+  for (let k = from.getFullYear() * 12 + from.getMonth() - 1; k <= to.getFullYear() * 12 + to.getMonth() + 1; k++) {
+    const d = payDate(i, Math.floor(k / 12), k % 12); if (d >= from && d <= to) out.push(d);
+  }
+  return out;
+}
+const isSubMonth = (i, m1) => !!i.sub14 && i.rule !== 'weekly' && (m1 === i.mFer || m1 === i.mNat);          // m1 = mês de 1 a 12
 function incomeBase(p, i, ym) {                                      // o valor "normal": o último valor real de um mês sem subsídio; sem ele, o valor do ordenado
   const regs = billReals(p, i).filter(r => r.ym < ym && !isSubMonth(i, +r.ym.slice(5)));
   return regs.length ? regs[regs.length - 1].v : priceAt(i, ym);
 }
 function incomeEstimate(p, i, ym) { return incomeBase(p, i, ym) * (isSubMonth(i, +ym.slice(5)) ? 2 : 1); }
 function payEvents(p, from, to) {                                    // os ordenados que caem entre duas datas
-  const out = [], k0 = from.getFullYear() * 12 + from.getMonth() - 1, k1 = to.getFullYear() * 12 + to.getMonth() + 1;
-  for (const i of p.incomes) for (let k = k0; k <= k1; k++) {
-    const d = payDate(i, Math.floor(k / 12), k % 12); if (d < from || d > to) continue;
-    const ym = ymOf(d), real = p.billLog[`${i.id}:${ym}`];
-    out.push({ inc: i, date: d, ym, real: real !== undefined, v: real ?? incomeEstimate(p, i, ym) });
+  const out = [];
+  for (const i of p.incomes) for (const d of payDatesIn(i, from, to)) {
+    const ym = ymOf(d), weekly = i.rule === 'weekly', real = weekly ? undefined : p.billLog[`${i.id}:${ym}`];
+    out.push({ inc: i, date: d, ym, real: real !== undefined, v: real ?? (weekly ? priceAt(i, ym) : incomeEstimate(p, i, ym)) });
   }
   return out.sort((a, b) => a.date - b.date);
 }
+const earnedBetween = (p, from, to) => p.earnings.filter(e => e.date >= ymd(from) && e.date <= ymd(to)).reduce((a, e) => a + e.amount, 0);
 function cycleOf(p, t) {                                             // o ciclo do primeiro ordenado: do último pagamento até ao dia antes do próximo
-  const a = p.incomes[0], k0 = t.getFullYear() * 12 + t.getMonth(); let start = null, next = null;
-  for (let k = k0 - 1; k <= k0 + 1; k++) { const d = payDate(a, Math.floor(k / 12), k % 12); if (d <= t) start = d; else if (!next) next = d; }
+  const a = p.incomes[0]; let start = null, next = null;
+  if (a.rule === 'weekly') {
+    const back = (t.getDay() - a.wday + 7) % 7;
+    start = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back); next = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back + 7);
+  } else {
+    const k0 = t.getFullYear() * 12 + t.getMonth();
+    for (let k = k0 - 1; k <= k0 + 1; k++) { const d = payDate(a, Math.floor(k / 12), k % 12); if (d <= t) start = d; else if (!next) next = d; }
+  }
   return { start, next, end: new Date(next.getFullYear(), next.getMonth(), next.getDate() - 1) };
 }
 function spentBetween(p, from, to) {                                // o que já saiu (o casino conta pelo saldo do período)
@@ -1252,35 +1275,40 @@ function spentBetween(p, from, to) {                                // o que já
 }
 function restaInfo(p) {
   const t = today0(), y = t.getFullYear(), year = ui.period === 'year', tom = afterToday();
-  let start, end, next = null;
+  let start, end, next = null, mode = 'cycle';
   if (year) { start = new Date(y, 0, 1); end = new Date(y, 11, 31); }
-  else { const c = cycleOf(p, t); start = c.start; end = c.end; next = c.next; }
-  const income = payEvents(p, start, end).filter(e => !year || e.date.getFullYear() * 12 + e.date.getMonth() >= startIndex(e.inc)).reduce((a, e) => a + e.v, 0);
+  else if (p.incomes.length) { const c = cycleOf(p, t); start = c.start; end = c.end; next = c.next; }
+  else { mode = p.earnCycle; [start, end] = periodOf(mode, t); next = nextPeriod(mode, end); }       // só ganhos soltos: o mês ou a semana
+  const income = payEvents(p, start, end).filter(e => !year || e.date.getFullYear() * 12 + e.date.getMonth() >= startIndex(e.inc)).reduce((a, e) => a + e.v, 0) + earnedBetween(p, start, end);
   const spent = spentBetween(p, start, t), coming = tom <= end ? entriesBetween(p, tom, end).reduce((a, e) => a + e.amount, 0) : 0;
-  return { year, y, income, spent, coming, left: income - spent - coming, days: Math.round((end - t) / DAY) + 1, next };
+  return { year, y, mode, income, spent, coming, left: income - spent - coming, days: Math.round((end - t) / DAY) + 1, next };
 }
 function pendingIncomes(p) {                                        // ordenados de valor variável do ciclo atual que já caíram e ainda não têm o valor real
   if (!p.incomes.length) return [];
   const t = today0();
-  return payEvents(p, cycleOf(p, t).start, t).filter(e => e.inc.variable && !e.real);
+  return payEvents(p, cycleOf(p, t).start, t).filter(e => e.inc.variable && !e.real && e.inc.rule !== 'weekly');
 }
 const dayMon = d => `${d.getDate()} ${MESES[d.getMonth()].slice(0, 3)}`;
 function restaHTML(p) {
-  if (!p.incomes.length) return `<div class="card resta-empty"><p class="muted">Descobre quanto te resta até ao próximo ordenado.</p><button class="btn primary" data-act="add-income">Adicionar ordenado</button></div>`;
+  if (!p.incomes.length && !p.earnings.length) return `<div class="card resta-empty"><p class="muted">Descobre quanto te resta. Regista o ordenado ou os teus ganhos.</p>
+    <div class="resta-btns"><button class="btn primary" data-act="add-income">Adicionar ordenado</button><button class="btn ghost" data-act="add-earning">${ico('plus')} Ganho</button></div></div>`;
   const r = restaInfo(p), full = Math.max(r.income, r.spent + r.coming, 1);
   const pct = n => Math.max(0, Math.min(100, n / full * 100)).toFixed(1);
   const neg = r.left < 0, perDay = r.days > 0 ? r.left / r.days : 0, pend = pendingIncomes(p);
+  const title = r.year ? 'Resta em ' + r.y : r.mode === 'week' ? 'Resta esta semana' : r.mode === 'month' ? 'Resta este mês' : 'Resta até ao próximo ordenado';
+  const until = r.year ? 'até ao fim do ano' : r.mode === 'week' ? 'até ao fim da semana' : r.mode === 'month' ? 'até ao fim do mês' : 'até ao próximo ordenado, a ' + dayMon(r.next);
   const pendHTML = pend.length ? `<div class="card resta-pend">${pend.map(e => `<button class="item" data-act="invoice" data-id="${e.inc.id}:${e.ym}"><div class="ic" style="background:#10b981">${ico('spend')}</div>
       <div class="grow"><b>Quanto recebeste em ${MESES[e.date.getMonth()]}?</b><span>${esc(incomeName(e.inc))} · estimativa ${nf(e.v)} €</span></div></button>`).join('')}</div>` : '';
   return `${pendHTML}<div class="big-total resta-card">
-      <button class="rest-edit" data-act="income-menu" aria-label="Ordenado">${ico('edit')}</button>
-      <span>${r.year ? 'Resta em ' + r.y : 'Resta até ao próximo ordenado'}</span><b data-v="${r.left}">= ${nf(r.left)} €</b>
+      <button class="rest-add" data-act="add-earning">${ico('plus')} Ganho</button>
+      <button class="rest-edit" data-act="income-menu" aria-label="Ordenados e ganhos">${ico('edit')}</button>
+      <span>${title}</span><b data-v="${r.left}">= ${nf(r.left)} €</b>
       <div class="rbar2"><i class="g" style="width:${pct(r.spent)}%"></i><i class="p" style="width:${pct(r.coming)}%"></i></div>
-      ${btStats([[nf(r.income) + ' €', r.year ? 'ordenados' : 'recebido'], [cost(r.spent), 'gasto'], [cost(r.coming), 'por vir']])}
+      ${btStats([[nf(r.income) + ' €', r.year ? 'entrou' : 'recebido'], [cost(r.spent), 'gasto'], [cost(r.coming), 'por vir']])}
     </div>
     <div class="card resta-day">${neg
-      ? `<div class="rd-row"><span>Já passas o ordenado em</span><b class="neg">${nf(-r.left)} €</b></div>`
-      : `<div class="rd-row"><span>Podes gastar</span><b class="pos">≈ ${nf(perDay)} € por dia</b></div><div class="rd-row sub"><span>${r.year ? 'até ao fim do ano' : 'até ao próximo ordenado, a ' + dayMon(r.next)}</span><span>${r.days} dia${r.days === 1 ? '' : 's'}</span></div>`}</div>`;
+      ? `<div class="rd-row"><span>Já gastaste mais do que entrou em</span><b class="neg">${nf(-r.left)} €</b></div>`
+      : `<div class="rd-row"><span>Podes gastar</span><b class="pos">≈ ${nf(perDay)} € por dia</b></div><div class="rd-row sub"><span>${until}</span><span>${r.days} dia${r.days === 1 ? '' : 's'}</span></div>`}</div>`;
 }
 function refreshResta() {
   const box = document.getElementById('resta'), p = current(); if (!box || !p) return;
@@ -1288,37 +1316,63 @@ function refreshResta() {
   swapBox(box, restaHTML(p));
   countUp(box.querySelector('.big-total b'), prev);
 }
-const payText = i => i.rule === 'bizend' ? `${NTH_LABEL[i.nth || 3]} dia útil do mês` : `dia ${i.day}`;
-function incomeMenuSheet() {                                         // lista dos ordenados: tocar para editar, ou juntar outro
-  const p = current();
-  openSheet(`<h2>Ordenados</h2>
+const payText = i => i.rule === 'weekly' ? `toda a ${WDAY_NAMES[i.wday]}` : i.rule === 'bizend' ? `${NTH_LABEL[i.nth || 3]} dia útil do mês` : `dia ${i.day}`;
+function incomeMenuSheet() {                                         // ordenados e ganhos: tocar para editar, ou juntar outro
+  const p = current(), recent = p.earnings.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
+  openSheet(`<h2>Ordenados e ganhos</h2>
     ${p.incomes.map(i => `<button class="item" data-act="edit-income" data-id="${i.id}"><div class="ic" style="background:#10b981">${ico('spend')}</div>
-      <div class="grow"><b>${esc(incomeName(i))}</b><span>${nf(curAmount(i))} € · ${payText(i)}${i.sub14 ? ' · subsídios' : ''}</span></div></button>`).join('')}
-    <div class="stack"><button class="btn primary" data-act="add-income">${ico('plus')} Adicionar ordenado</button></div>`);
+      <div class="grow"><b>${esc(incomeName(i))}</b><span>${nf(curAmount(i))} € · ${payText(i)}${i.sub14 && i.rule !== 'weekly' ? ' · subsídios' : ''}</span></div></button>`).join('')}
+    ${recent.length ? `<p class="hint" style="margin:14px 0 4px">Ganhos recentes</p>${recent.map(e => { const d = parseYmd(e.date);
+      return `<button class="item" data-act="edit-earning" data-id="${e.id}"><div class="ic" style="background:#0ea5e9">${ico('plus')}</div>
+      <div class="grow"><b>${esc(e.note || 'Ganho')}</b><span>${d.getDate()} ${MESES[d.getMonth()].slice(0, 3)}</span></div><div class="amt pos">+${nf(e.amount)} €</div></button>`; }).join('')}` : ''}
+    ${p.incomes.length ? '' : `<div class="field" style="margin-top:14px"><label>O resta conta</label><div class="chips">${[['month', 'O mês'], ['week', 'A semana']].map(([k, l]) => `<button type="button" class="chip ${p.earnCycle === k ? 'on' : ''}" data-act="earn-cycle" data-v="${k}" style="--c:var(--accent)">${l}</button>`).join('')}</div></div>`}
+    <div class="stack"><button class="btn primary" data-act="add-earning">${ico('plus')} Registar ganho</button><button class="btn ghost" data-act="add-income">${ico('plus')} Adicionar ordenado</button></div>`);
 }
 function incomeSheet(inc) {
   const s = inc || INCOME_DEFAULT;
   ui.editId = inc?.id || null; ui.incSub = !!s.sub14; ui.incVar = !!s.variable; ui.incRule = s.rule || 'day';
   const mon = (id, v) => `<select class="input" id="${id}">${MESES.map((n, k) => `<option value="${k + 1}" ${v === k + 1 ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
+  const monthly = () => ui.incRule !== 'weekly';
   openSheet(`
     <h2>${inc ? 'Editar ordenado' : 'Novo ordenado'}</h2>
     <div class="field"><label>Nome (opcional)</label><input class="input" id="in-name" maxlength="30" placeholder="Ordenado" value="${esc(s.name)}"></div>
     <div class="field"><label>Valor líquido (€) *</label><input class="input big" id="in-amount" inputmode="decimal" placeholder="0,00" value="${s.amount === '' ? '' : String(inc ? curAmount(inc) : s.amount).replace('.', ',')}">${inc && pricesText(inc) ? `<span class="hint">${pricesText(inc)}</span>` : ''}</div>
     <div class="field"><label>Quando recebes</label>
-      <div class="chips"><button type="button" class="chip ${ui.incRule === 'day' ? 'on' : ''}" data-act="in-rule" data-v="day" style="--c:var(--accent)">Um dia fixo</button><button type="button" class="chip ${ui.incRule === 'bizend' ? 'on' : ''}" data-act="in-rule" data-v="bizend" style="--c:var(--accent)">Dia útil do fim do mês</button></div></div>
+      <div class="chips">${[['day', 'Um dia fixo'], ['bizend', 'Dia útil do fim do mês'], ['weekly', 'Toda a semana']].map(([k, l]) => `<button type="button" class="chip ${ui.incRule === k ? 'on' : ''}" data-act="in-rule" data-v="${k}" style="--c:var(--accent)">${l}</button>`).join('')}</div>
+      <span class="hint">Se ganhas por dia ou de forma irregular, usa o botão "+ Ganho" no cartão do resta.</span></div>
     <div class="field" id="in-day-wrap" style="${ui.incRule === 'day' ? '' : 'display:none'}"><label>Dia do mês</label><input class="input" id="in-day" type="number" min="1" max="31" value="${s.day}"></div>
     <div class="field" id="in-nth-wrap" style="${ui.incRule === 'bizend' ? '' : 'display:none'}"><label>Qual dia útil</label>
       <select class="input" id="in-nth">${[1, 2, 3].map(n => `<option value="${n}" ${(s.nth || 3) === n ? 'selected' : ''}>${NTH_LABEL[n][0].toUpperCase() + NTH_LABEL[n].slice(1)} dia útil</option>`).join('')}</select>
       <span class="hint">Conta de segunda a sexta. Os feriados não são considerados.</span></div>
-    <div class="switch-row" data-act="in-var"><div><b>O valor muda todos os meses</b><div class="hint">Quando o ordenado cai, a app pergunta quanto recebeste. Até lá usa o último valor.</div></div><div class="switch ${s.variable ? 'on' : ''}" id="in-var-switch"></div></div>
-    <div class="switch-row" data-act="in-sub"><div><b>Subsídios de férias e de Natal</b><div class="hint">Em dois meses do ano recebes mais ou menos o dobro</div></div><div class="switch ${s.sub14 ? 'on' : ''}" id="in-sub-switch"></div></div>
-    <div class="row2" id="in-sub-wrap" style="${s.sub14 ? '' : 'display:none'}">
-      <div class="field"><label>Mês do subsídio de férias</label>${mon('in-fer', s.mFer)}</div>
-      <div class="field"><label>Mês do subsídio de Natal</label>${mon('in-nat', s.mNat)}</div>
+    <div class="field" id="in-wday-wrap" style="${ui.incRule === 'weekly' ? '' : 'display:none'}"><label>Que dia da semana</label>
+      <select class="input" id="in-wday">${WDAY_NAMES.map((n, k) => `<option value="${k}" ${(s.wday ?? 5) === k ? 'selected' : ''}>${n[0].toUpperCase() + n.slice(1)}</option>`).join('')}</select></div>
+    <div id="in-monthly" style="${monthly() ? '' : 'display:none'}">
+      <div class="switch-row" data-act="in-var"><div><b>O valor muda todos os meses</b><div class="hint">Quando o ordenado cai, a app pergunta quanto recebeste. Até lá usa o último valor.</div></div><div class="switch ${s.variable ? 'on' : ''}" id="in-var-switch"></div></div>
+      <div class="switch-row" data-act="in-sub"><div><b>Subsídios de férias e de Natal</b><div class="hint">Em dois meses do ano recebes mais ou menos o dobro</div></div><div class="switch ${s.sub14 ? 'on' : ''}" id="in-sub-switch"></div></div>
+      <div class="row2" id="in-sub-wrap" style="${s.sub14 ? '' : 'display:none'}">
+        <div class="field"><label>Mês do subsídio de férias</label>${mon('in-fer', s.mFer)}</div>
+        <div class="field"><label>Mês do subsídio de Natal</label>${mon('in-nat', s.mNat)}</div>
+      </div>
     </div>
     <div class="stack">
       <button class="btn primary" data-act="save-income">Guardar</button>
       ${inc ? '<button class="btn danger" data-act="del-income">Eliminar</button>' : ''}
+    </div>`);
+}
+function earningSheet(e) {                                           // um ganho solto: valor, data e nota
+  const s = e || { amount: '', date: ymd(today0()), note: '' };
+  ui.editId = e?.id || null;
+  openSheet(`
+    <h2>${e ? 'Editar ganho' : 'Registar ganho'}</h2>
+    <div class="field"><label>Valor (€) *</label><input class="input big" id="ea-amount" inputmode="decimal" placeholder="0,00" value="${s.amount === '' ? '' : String(s.amount).replace('.', ',')}"></div>
+    <div class="row2">
+      <div class="field"><label>Data</label><input class="input" id="ea-date" type="date" value="${s.date}"></div>
+      <div class="field"><label>Nota (opcional)</label><input class="input" id="ea-note" maxlength="40" placeholder="Ex.: Cliente" value="${esc(s.note || '')}"></div>
+    </div>
+    <span class="hint" style="display:block;margin:-4px 0 14px">Podes registar todos os dias, ou o total da semana no último dia.</span>
+    <div class="stack">
+      <button class="btn primary" data-act="save-earning">Guardar</button>
+      ${e ? '<button class="btn danger" data-act="del-earning">Eliminar</button>' : ''}
     </div>`);
 }
 function setPeriod(k, slide) {                    // slide = true só quando vem de um deslize; ao tocar nos botões o cartão fica no sítio
@@ -2525,7 +2579,7 @@ function afterProfileRender() {
 }
 
 /* ── Cópias de segurança ── */
-const hasData = p => p.incomes.length > 0 || p.subs.length > 0 || p.spends.length > 0 || p.bills.length > 0 || p.carFix.length > 0 || Object.keys(p.hlog).length > 0;
+const hasData = p => p.incomes.length > 0 || p.earnings.length > 0 || p.subs.length > 0 || p.spends.length > 0 || p.bills.length > 0 || p.carFix.length > 0 || Object.keys(p.hlog).length > 0;
 const DAY = 864e5;
 function needsBackup(p) {      // lembrete suave: só com dados e passados 30 dias
   return hasData(p) && Date.now() - new Date(p.lastBackup || p.created).getTime() > 14 * DAY;
@@ -2691,6 +2745,7 @@ function updateSubIcon() {                       // atualiza a pré-visualizaç�
   $('#s-icon-label').textContent = ui.subIcon === '' ? `Automático · ${what}` : what;
 }
 
+const NOTE_HINT = { fuel: 'Ex.: Galp', food: 'Ex.: Sushi', transport: 'Ex.: Autocarro' };      // a sugestão da nota muda com a categoria; em "Outros" não há nenhuma
 function spendSheet(sp) {
   const t = today0();
   const minDate = ymd(new Date(t.getFullYear(), t.getMonth(), 1));   // só gere desde o início do mês atual
@@ -2707,7 +2762,7 @@ function spendSheet(sp) {
       <div class="expand ${s.cat === 'fuel' ? 'open' : ''}" id="fuel-hint"><div><span class="hint">${fuelHint}</span></div></div></div>
     <div class="row2">
       <div class="field"><label>Data</label><input class="input" id="g-date" type="date" min="${s.date < minDate ? s.date : minDate}" value="${s.date}"></div>
-      <div class="field"><label>Nota (opcional)</label><input class="input" id="g-note" maxlength="40" placeholder="Ex.: Galp" value="${esc(s.note)}"></div>
+      <div class="field"><label>Nota (opcional)</label><input class="input" id="g-note" maxlength="40" placeholder="${NOTE_HINT[s.cat] || ''}" value="${esc(s.note)}"></div>
     </div>
     <div class="stack">
       <button class="btn primary" data-act="save-spend">Guardar</button>
@@ -3842,19 +3897,35 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
     case 'vperiod-sum': setVPeriod(el.dataset.v); break;
     case 'sper-sum': ui.sper = el.dataset.v; refreshSubs(); break;
     case 'mper-sum': { ui.mper = el.dataset.v; const box = document.getElementById('medias'); if (box) swapBox(box, mediasHTML(p)); break; }
-    case 'income-menu': p.incomes.length === 1 ? incomeSheet(p.incomes[0]) : incomeMenuSheet(); break;
+    case 'income-menu': p.incomes.length === 1 && !p.earnings.length ? incomeSheet(p.incomes[0]) : incomeMenuSheet(); break;
+    case 'add-earning': earningSheet(); break;
+    case 'edit-earning': earningSheet(p.earnings.find(x => x.id === el.dataset.id)); break;
+    case 'earn-cycle': p.earnCycle = el.dataset.v; saveDB(); document.querySelectorAll('[data-act=earn-cycle]').forEach(c => c.classList.toggle('on', c === el)); refreshResta(); break;
+    case 'save-earning': {
+      const amount = parseAmount($('#ea-amount').value), date = $('#ea-date').value;
+      if (!(amount > 0)) return toast('Indica o valor');
+      if (!date) return toast('Indica a data');
+      const data = { amount, date, note: $('#ea-note').value.trim() };
+      if (ui.editId) Object.assign(p.earnings.find(x => x.id === ui.editId), data); else p.earnings.push({ id: uid(), ...data });
+      saveDB(); closeSheet(); render(); toast('Ganho registado'); break;
+    }
+    case 'del-earning':
+      if (await askConfirm({ title: 'Eliminar este ganho?', text: 'Deixa de contar no quanto te resta. Não dá para desfazer.', ok: 'Eliminar', danger: true, icon: 'trash' })) { const eid = ui.editId; p.earnings = p.earnings.filter(x => x.id !== eid); saveDB(); closeSheet(); render(); toast('Eliminado'); }
+      break;
     case 'add-income': incomeSheet(); break;
     case 'edit-income': incomeSheet(p.incomes.find(i => i.id === el.dataset.id)); break;
     case 'in-sub': ui.incSub = !ui.incSub; $('#in-sub-switch').classList.toggle('on', ui.incSub); $('#in-sub-wrap').style.display = ui.incSub ? '' : 'none'; break;
     case 'in-var': ui.incVar = !ui.incVar; $('#in-var-switch').classList.toggle('on', ui.incVar); break;
     case 'in-rule':
       ui.incRule = el.dataset.v; document.querySelectorAll('[data-act=in-rule]').forEach(c => c.classList.toggle('on', c === el));
-      $('#in-day-wrap').style.display = ui.incRule === 'day' ? '' : 'none'; $('#in-nth-wrap').style.display = ui.incRule === 'bizend' ? '' : 'none'; break;
+      $('#in-day-wrap').style.display = ui.incRule === 'day' ? '' : 'none'; $('#in-nth-wrap').style.display = ui.incRule === 'bizend' ? '' : 'none';
+      $('#in-wday-wrap').style.display = ui.incRule === 'weekly' ? '' : 'none'; $('#in-monthly').style.display = ui.incRule === 'weekly' ? 'none' : ''; break;
     case 'save-income': {
-      const amount = parseAmount($('#in-amount').value), day = Math.min(31, Math.max(1, parseInt($('#in-day').value, 10) || 0));
+      const amount = parseAmount($('#in-amount').value), dayRaw = parseInt($('#in-day').value, 10), day = dayRaw >= 1 && dayRaw <= 31 ? dayRaw : 0;
       if (!(amount > 0)) return toast('Indica o valor');
       if (ui.incRule === 'day' && !day) return toast('Indica o dia do pagamento');
-      const data = { name: $('#in-name').value.trim(), amount, rule: ui.incRule, day: day || 27, nth: +$('#in-nth').value, period: 'month', month: 1, sub14: ui.incSub, mFer: +$('#in-fer').value, mNat: +$('#in-nat').value, variable: ui.incVar };
+      const weekly = ui.incRule === 'weekly';
+      const data = { name: $('#in-name').value.trim(), amount, rule: ui.incRule, day: day || 1, nth: +$('#in-nth').value, wday: +$('#in-wday').value, period: 'month', month: 1, sub14: !weekly && ui.incSub, mFer: +$('#in-fer').value, mNat: +$('#in-nat').value, variable: !weekly && ui.incVar };
       if (ui.editId) {
         const old = p.incomes.find(x => x.id === ui.editId);
         if (Math.abs(amount - curAmount(old)) > 0.004) { ui.pend = { kind: 'inc', id: old.id, data }; return priceFromSheet(old, amount); }
@@ -3969,6 +4040,7 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
     case 'cat': {
       ui.sheetCat = el.dataset.v;
       document.querySelectorAll('[data-act=cat]').forEach(b => b.classList.toggle('on', b === el));
+      $('#g-note').placeholder = NOTE_HINT[ui.sheetCat] || '';
       $('#fuel-hint').classList.toggle('open', ui.sheetCat === 'fuel'); break;                // a nota abre e fecha a deslizar, empurrando o resto com suavidade
     }
     case 'full-toggle': ui.sheetFull = !ui.sheetFull; $('#g-full-switch').classList.toggle('on', ui.sheetFull); break;
