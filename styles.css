@@ -1404,3 +1404,10 @@ body.pausing #app *, body.pausing #app *::before, body.pausing #app *::after { a
 
 .lab.scrolling .lab-prev *, .lab.scrolling .lab-prev *::before, .lab.scrolling .lab-prev *::after { animation-play-state: paused !important; }
 .offscr, .offscr *, .offscr *::before, .offscr *::after { animation-play-state: paused !important; }
+
+/* janelas (sheets): o escurecimento é uma camada à parte que só muda de opacidade, e a janela vive na sua própria camada */
+.overlay { background: none; }
+.overlay::before { content: ''; position: absolute; inset: 0; background: rgba(0, 0, 0, .55); opacity: var(--dim, 1); transition: opacity var(--dimt, .26s) ease; will-change: opacity; pointer-events: none; }
+.overlay > .sheet { position: relative; will-change: transform; }
+
+.swatch i { background: var(--surface-2); }

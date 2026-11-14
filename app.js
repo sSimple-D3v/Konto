@@ -45,6 +45,11 @@ function migrateProfile(p) {
   if (!VICE_ICONS.some(v => v[0] === p.viceIcon)) p.viceIcon = p.habits.some(h => h.tpl === 'tabaco') ? 'cig' : 'flame';   // chama por defeito; quem já tinha tabaco mantém o cigarro
   p.created ||= now;                                      // v2
   p.subs.forEach(s => { s.created ||= now; });
+  p.habits.forEach(h => {                                                   // cópias antigas sem data de criação: usa o primeiro registo (senão as médias davam NaN)
+    if (h.created && !isNaN(new Date(h.created))) return;
+    const ks = Object.keys(p.hlog || {}).filter(k => k.startsWith(h.id + ':')).map(k => k.slice(h.id.length + 1)).sort();
+    h.created = ks.length ? new Date(ks[0] + 'T00:00:00').toISOString() : now;
+  });
   p.habits.forEach(h => { delete h.inPlay; delete h.inPlayAt; if (h.icon === 'vices') h.icon = 'cig'; });   // 'vices' passou a ser o ícone escolhido por perfil   // o saldo do casino deixou de existir
   // casino: já não há levantamentos. Nos perfis da versão com "ganho" separado (campo g), o ganho passa a ser o ganho real.
   p.habits.filter(h => h.tpl === 'casino').forEach(h => {
@@ -349,7 +354,34 @@ function coverLayer(style, pal) {
     default: return `linear-gradient(135deg, ${c1} 35%, ${c2} 65%)`;       // gradiente
   }
 }
-function themeBg(style, pal, small = false, card = false) {     // o "fundo de destaque" de cada estilo (valor de `background`); small = miniatura da lista
+/* Miniaturas QUADRADAS das cores: o desenho largo (2:1) ficava cortado nos lados e estilos como as algas ou as medusas quase não se viam.
+   Aqui cada estilo tem uma amostra própria, pequena e completa, que representa bem o estilo (uma alga, uma medusa, dois corações, barras…). */
+function sqSample(style, pal) {
+  const [c1, c2] = pal.g, dk = (h, k) => mixHex(h, '#000000', k), mid = mixHex(c1, c2, .5), A = mixHex(c1, '#ffffff', .25), svgBg = (body, under, defs = '') => `url(${svgUri(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'>${defs}${body}</svg>`)}) center / 100% 100% no-repeat, ${under}`;
+  switch (style) {
+    case 'kelp': return svgBg(`<path d='M50 104 C41 84 59 68 50 52 S41 24 50 8' fill='none' stroke='${A}' stroke-width='7' stroke-linecap='round'/><circle cx='70' cy='34' r='3' fill='none' stroke='#fff' stroke-opacity='.7' stroke-width='1'/><circle cx='30' cy='54' r='2' fill='none' stroke='#fff' stroke-opacity='.7' stroke-width='1'/><circle cx='74' cy='64' r='1.6' fill='none' stroke='#fff' stroke-opacity='.7' stroke-width='1'/>`, `linear-gradient(180deg, ${dk(mid, .45)} 0%, ${dk(c2, .88)} 100%)`);
+    case 'jelly': { const a = mixHex(c1, '#ffffff', .45), b = mixHex(c1, '#ffffff', .85);
+      return svgBg(`<g opacity='.3' transform='translate(8 58)'>${JELLY_SVG(a, b, '.55')}</g><g opacity='.95' transform='translate(26 14)'>${JELLY_SVG(a, b, '1.15')}</g>`, `linear-gradient(180deg, ${dk(mid, .45)} 0%, ${dk(c2, .88)} 100%)`); }
+    case 'hgrid': { const a = mixHex(c1, '#ffffff', .3), b = mixHex(c1, '#ffffff', .7), h = (x, y, r, k, f, o) => `<path fill='${f}' fill-opacity='${o}' transform='translate(${x} ${y}) rotate(${r}) scale(${k}) translate(-12 -12)' d='${HEART_PATH}'/>`;
+      return svgBg(h(48, 48, -10, 2.4, b, .95) + h(22, 26, 14, 1.2, a, .6) + h(76, 70, -16, 1.5, a, .75) + h(78, 24, 10, 1, b, .5), `linear-gradient(180deg, ${dk(c2, .82)} 0%, ${dk(mid, .45)} 100%)`); }
+    case 'magma': return svgBg(`<circle cx='36' cy='66' r='24' fill='url(#g)'/><circle cx='70' cy='74' r='15' fill='url(#g)'/><circle cx='62' cy='36' r='4' fill='#fff' fill-opacity='.5'/><circle cx='28' cy='30' r='3' fill='#fff' fill-opacity='.5'/>`, `linear-gradient(180deg, ${dk(c2, .6)} 0%, ${dk(c2, .2)} 55%, ${mixHex(c1, c2, .4)} 100%)`, `<defs><radialGradient id='g' cx='.35' cy='.3' r='.955'><stop offset='0' stop-color='${c1}'/><stop offset='.38' stop-color='${mid}'/><stop offset='.72' stop-color='${c2}' stop-opacity='0'/></radialGradient></defs>`);
+    case 'bars': { const bs = [[10, 30], [28, 52], [46, 38], [64, 66], [82, 48]].map(([x, h], i) => `<rect x='${x}' y='${86 - h}' width='12' height='${h}' rx='2' fill='${i % 3 ? c1 : mixHex(c1, '#ffffff', .5)}'/>`).join('');
+      return svgBg(bs + `<rect x='4' y='86' width='92' height='2' fill='#fff' fill-opacity='.25'/>`, dk(c2, .9)); }
+    case 'linechart': return svgBg(`<path d='M0 100 L8 70 L28 52 L46 60 L66 34 L92 22 L100 18 L100 100Z' fill='${c1}' fill-opacity='.2'/><polyline points='8,70 28,52 46,60 66,34 92,22' fill='none' stroke='${c1}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/><circle cx='92' cy='22' r='3.5' fill='${mixHex(c1, '#ffffff', .5)}'/>`, dk(c2, .9));
+    case 'clouds': { const cl = (x, y, w, h, o) => `<g fill='#fff' opacity='${o}'><rect x='${x}' y='${y}' width='${w}' height='${h}' rx='${h / 2}'/><circle cx='${x + w * .36}' cy='${y + h * .1}' r='${h * .62}'/><circle cx='${x + w * .62}' cy='${y + h * .2}' r='${h * .5}'/></g>`;
+      return svgBg(cl(22, 34, 56, 20, .32) + cl(8, 68, 30, 10, .2) + cl(58, 72, 34, 12, .2), `linear-gradient(180deg, ${dk(c2, .55)} 0%, ${dk(mid, .25)} 100%)`); }
+    default: return null;
+  }
+}
+const bgMemo = new Map();                                              // as miniaturas repetem-se muito (e cada uma custa a montar): guardam-se prontas
+function themeBg(style, pal, small = false, card = false) {
+  if (!small || card) return themeBgRaw(style, pal, small, card);
+  const k = `${style}|${pal.id}|${small}|${fxLevel(appliedTheme)}`; let v = bgMemo.get(k);
+  if (v === undefined) { v = themeBgRaw(style, pal, small, card); if (bgMemo.size > 400) bgMemo.clear(); bgMemo.set(k, v); }
+  return v;
+}
+function themeBgRaw(style, pal, small = false, card = false) {
+  if (small === 'sq') { const q = sqSample(style, pal); if (q) return q; }     // o "fundo de destaque" de cada estilo (valor de `background`); small = miniatura da lista
   const [c1, c2] = pal.g, lin = `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`, w = a => `rgba(255,255,255,${a})`;
   const lv = card ? CARD_LEVEL : fxLevel(appliedTheme);       // nos cartões, a quantidade é sempre a padrão
   switch (style) {
@@ -1518,6 +1550,7 @@ function calClose(el, done) {                       // fecha devagar e só depoi
   an.onfinish = done;
 }
 function refreshCalSummary(p) {                    // abrir/fechar as listas do histórico só mexe na zona do histórico (o resto do calendário não se refaz nem repete as animações)
+  if (!$('#calendar')) return;                                       // o calendário não está no ecrã (mudou de separador)
   const tmp = document.createElement('div'); tmp.innerHTML = vCalendar(p);
   const novo = tmp.querySelector('#cal-sum'), velho = document.getElementById('cal-sum');
   if (novo && velho) velho.innerHTML = novo.innerHTML; else $('#calendar').innerHTML = tmp.innerHTML;
@@ -2508,11 +2541,11 @@ function fitPager(box) {                              // a altura segue a págin
   const i = ui.page?.[box.dataset.k] || 0, g = box.querySelector('.pager-track').children[i];
   if (g && g.offsetHeight) box.querySelector('.pager-vp').style.height = g.offsetHeight + 8 + 'px';
 }
-function fitPagers() { document.querySelectorAll('.pager').forEach(fitPager); }
+function fitPagers() { document.querySelectorAll('.pager').forEach(fitPager); fillPreviews(); }
 function goPage(kind, to) {
   const box = document.getElementById(kind + '-wrap'); if (!box) return;
   const pages = +box.dataset.pages, i = Math.max(0, Math.min(pages - 1, to));
-  (ui.page ||= {})[kind] = i; fitPager(box); pauseFx(460);
+  (ui.page ||= {})[kind] = i; fillPreviews(true); fitPager(box); pauseFx(460);
   box.querySelector('.pager-track').style.transform = `translateX(-${i * 100}%)`;
   box.querySelectorAll('.pg-dot').forEach((d, n) => d.classList.toggle('on', n === i));
   box.querySelector('[data-d="-1"]')?.toggleAttribute('disabled', i === 0);
@@ -2532,9 +2565,9 @@ document.addEventListener('touchend', e => {
 function themeControls(p) {
   const th = themeOf(p), on = (a, b) => a === b ? 'on' : '';
   const palTile = pal => `<button class="swatch ${on(th.palette, pal.id)}" data-act="theme-pal" data-v="${pal.id}" data-pal="${pal.id}" aria-label="${pal.name}">
-      <i style="background:${themeBg(th.style, pal, true)}"></i><span>${pal.name}</span></button>`;
+      <i></i><span>${pal.name}</span></button>`;
   const styleTile = ([k, l]) => `<button class="swatch wide ${on(th.style, k)}" data-act="theme-style" data-v="${k}" aria-label="${l}">
-      <i style="background:${themeBg(k, palOf(th.palette), true)}"></i><span>${l}</span></button>`;
+      <i></i><span>${l}</span></button>`;
   return `${swatchPager('pal', PALETTES, PAL_PER_PAGE, palTile, 'pal', PALETTES.findIndex(x => x.id === th.palette))}
     <div class="field"><label>Estilo</label>${swatchPager('style', THEME_STYLES, STYLE_PER_PAGE, styleTile, 'three', THEME_STYLES.findIndex(x => x[0] === th.style))}</div>
     <div class="switch-row" data-act="theme-anim"><div><b>Animações ligadas</b><div class="hint">Põe as cores a dançar. Se te der tonturas, é só desligar.</div></div><div class="switch ${th.anim ? 'on' : ''}" id="anim-switch"></div></div>
@@ -2550,14 +2583,41 @@ function themeControls(p) {
     <div class="field"><label>Modo</label><div class="seg four modes">${THEME_MODES.map(([k, l]) => `<button data-act="theme-mode" data-v="${k}" class="${on(th.mode, k)}">${l}</button>`).join('')}</div>
       <span class="hint">O tema é só deste perfil. Cada pessoa no telemóvel pode ter o seu.</span></div>`;
 }
-function refreshPreviews(th) {
-  document.querySelectorAll('#pal-wrap .swatch[data-pal]').forEach(b => { b.querySelector('i').style.background = themeBg(th.style, palOf(b.dataset.pal), true); });
-  document.querySelectorAll('#style-wrap .swatch[data-v]').forEach(b => { b.querySelector('i').style.background = themeBg(b.dataset.v, palOf(th.palette), true); });
+/* As miniaturas das cores e dos estilos levam imagens grandes (dezenas de KB cada, no texto): pô-las todas de uma vez fazia a janela travar ao abrir.
+   Agora a janela abre vazia-mas-leve; as da página visível enchem logo a seguir e as outras, aos poucos, quando o telemóvel está livre. */
+const idleRun = f => window.requestIdleCallback ? requestIdleCallback(f, { timeout: 1500 }) : setTimeout(f, 80);
+function fillSwatch(b, th) {
+  const i = b.querySelector('i'); if (!i) return;
+  i.style.background = b.dataset.pal ? themeBg(th.style, palOf(b.dataset.pal), 'sq') : themeBg(b.dataset.v, palOf(th.palette), true);
+  b.dataset.f = '1';
+}
+let fillBusy = false, fillDelay = 0;
+function fillPreviews(sync) {
+  const p = current(); if (!p || !document.getElementById('pal-wrap')) return;
+  const pend = [...document.querySelectorAll('#pal-wrap .swatch:not([data-f]), #style-wrap .swatch:not([data-f])')]; if (!pend.length) return;
+  const vis = b => { const w = b.closest('.pager'); return !w || b.closest('.theme-grid') === w.querySelector('.pager-track').children[ui.page?.[w.dataset.k] || 0]; };
+  const th = themeOf(p), later = pend.filter(b => !vis(b));
+  const now = pend.filter(vis); let j = 0;
+  const burst = () => { const t3 = themeOf(current()); for (let n = 0; n < 4 && j < now.length; n++, j++) if (now[j].isConnected && !now[j].dataset.f) fillSwatch(now[j], t3); if (j < now.length) requestAnimationFrame(burst); else fillBusy = false; };
+  if (sync) now.forEach(b => fillSwatch(b, th)); else if (!fillBusy) { fillBusy = true; setTimeout(() => requestAnimationFrame(burst), fillDelay); fillDelay = 0; }          // a janela abre primeiro; as miniaturas vão enchendo, 6 por imagem
+  let k = 0; const step = () => { const t2 = themeOf(current()); for (let n = 0; n < 3 && k < later.length; n++, k++) if (later[k].isConnected && !later[k].dataset.f) fillSwatch(later[k], t2); if (k < later.length) idleRun(step); };
+  if (later.length) idleRun(step);
+}
+function refreshPreviews(th) {                                           // mudou a cor ou o estilo: as miniaturas voltam a fazer-se (a página visível já, as outras depois)
+  document.querySelectorAll('#pal-wrap .swatch[data-f], #style-wrap .swatch[data-f]').forEach(b => delete b.dataset.f);
+  fillPreviews();
 }
 function appearanceSheet(p) {
   ui.page = {};                                                      // cada vez que abre, as cores e os estilos abrem na página do que está escolhido
-  openSheet(`<h2>Aparência</h2>${themeControls(p)}
+  fillDelay = 300;                                                   // espera a janela acabar de subir antes de encher as miniaturas
+  // A janela aparece já (cabeçalho e botão) e sobe; o conteúdo, que é pesado, entra logo a seguir: o toque responde de imediato.
+  openSheet(`<h2>Aparência</h2><div id="ap-body" style="min-height:68dvh"></div>
     <div class="stack"><button class="btn primary" data-act="close-btn">Pronto</button></div>`);
+  const tok = sheetTok;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const box = document.getElementById('ap-body'); if (!box || tok !== sheetTok) return;
+    box.style.minHeight = ''; box.innerHTML = themeControls(p); syncSegs();
+  }));
 }
 function vManage(p) {
   const cards = MODULES.map(m => `
@@ -2715,7 +2775,7 @@ function dismissSheet() {
   if (sheetClosing) return;
   sheetClosing = true; const tok = ++sheetTok;
   sh.style.animation = 'none'; sh.style.transition = 'transform .26s cubic-bezier(.4, 0, 1, 1)'; sh.style.transform = 'translateY(105%)';
-  if (ov) { ov.style.animation = 'none'; ov.style.transition = 'background-color .26s ease'; ov.style.backgroundColor = 'rgba(0, 0, 0, 0)'; }
+  if (ov) { ov.style.animation = 'none'; ov.style.setProperty('--dim', '0'); }                  // o escurecimento esvanece só por opacidade (não repinta o ecrã todo)
   setTimeout(() => { if (tok === sheetTok) { sheetClosing = false; closeSheet(); } }, 280);
 }
 let sheetDrag = null;
@@ -2731,13 +2791,13 @@ document.addEventListener('pointermove', e => {
   d.dy = Math.max(0, e.clientY - d.y0); const now = performance.now();
   d.v = (e.clientY - d.ly) / Math.max(1, now - d.lt); d.ly = e.clientY; d.lt = now;        // velocidade (px/ms) para decidir se foi um "empurrão"
   d.sh.style.transform = 'translateY(' + d.dy + 'px)';
-  if (d.ov) d.ov.style.backgroundColor = 'rgba(0, 0, 0, ' + (.55 * (1 - Math.min(1, d.dy / d.h))).toFixed(3) + ')';
+  if (d.ov) { d.ov.style.setProperty('--dimt', '0s'); d.ov.style.setProperty('--dim', (1 - Math.min(1, d.dy / d.h)).toFixed(3)); }
 });
 const endSheetDrag = e => {
   const d = sheetDrag; if (!d || (e && e.pointerId !== d.id)) return; sheetDrag = null;
   if (d.dy > 110 || (d.dy > 60 && d.v > .6)) return dismissSheet();                       // arrastou o suficiente (ou deu um empurrão): fecha
   d.sh.style.transition = 'transform .3s cubic-bezier(.2, .8, .2, 1)'; d.sh.style.transform = '';
-  if (d.ov) { d.ov.style.transition = 'background-color .3s ease'; d.ov.style.backgroundColor = ''; }
+  if (d.ov) { d.ov.style.setProperty('--dimt', '.3s'); d.ov.style.removeProperty('--dim'); }
   setTimeout(() => { d.sh.style.transition = ''; if (d.ov) d.ov.style.transition = ''; }, 320);
 };
 document.addEventListener('pointerup', endSheetDrag); document.addEventListener('pointercancel', endSheetDrag);
@@ -3615,7 +3675,10 @@ function watchVisible() {                                              // capas 
   if (!('IntersectionObserver' in window)) return;
   visIO ||= new IntersectionObserver(es => es.forEach(en => en.target.classList.toggle('offscr', !en.isIntersecting)), { rootMargin: '60px 0px' });
   document.querySelectorAll('.big-total, .cover').forEach(el => { if (!el.__vis) { el.__vis = 1; visIO.observe(el); } });
+  const q = ui.screen === 'profile' && current(), wk = q ? `${q.id}|${themeOf(q).style}|${themeOf(q).palette}` : '';
+  if (wk && wk !== warmedKey) { warmedKey = wk; setTimeout(() => idleRun(() => { if (!document.querySelector('#sheet-root .overlay')) warmSwatches(); }), 1800); }      // com calma, deixa as miniaturas da janela Aparência prontas
 }
+let warmedKey = '';
 let segQueued = false;
 const queueSync = () => {
   if (segQueued) return; segQueued = true;
@@ -3812,7 +3875,7 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
       const n = new Date(), today = act === 'cp-today';
       ui.cal.y = today ? n.getFullYear() : ui.pickY; ui.cal.m = today ? n.getMonth() : +el.dataset.m;
       ui.cal.sel = today ? n.getDate() : null; ui.cal.limit = 20; ui.calAnim = 'fade';
-      closeSheet(); $('#calendar').innerHTML = vCalendar(p); break;
+      closeSheet(); if ($('#calendar')) $('#calendar').innerHTML = vCalendar(p); break;
     }
     case 'cal-prev': case 'cal-next': {
       const d = new Date(ui.cal.y, ui.cal.m + (act === 'cal-next' ? 1 : -1), 1);
@@ -4384,6 +4447,16 @@ function warmUp() {
   let i = 0;
   const step = () => { if (i < PALETTES.length) { try { pixelGradient(PALETTES[i].g[0], PALETTES[i].g[1]); } catch {} i++; idle(step); } };   // uma de cada vez
   idle(step);
+}
+function warmSwatches() {                                             // desenha (invisível, pequeno) as miniaturas da janela Aparência: ficam descodificadas para quando a abrires
+  const p = current(); if (!p || document.getElementById('warm-sw')) return;
+  const th = themeOf(p), box = document.createElement('div'); box.id = 'warm-sw';
+  box.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;overflow:hidden;opacity:.01;pointer-events:none;z-index:-1';
+  document.body.appendChild(box);
+  const jobs = [...PALETTES.map(q => themeBg(th.style, q, 'sq')), ...THEME_STYLES.map(([k]) => themeBg(k, palOf(th.palette), true))]; let i = 0;
+  const step = () => { if (!box.isConnected) return; for (let n = 0; n < 3 && i < jobs.length; n++, i++) { const d = document.createElement('div'); d.style.cssText = 'width:64px;height:64px;background:' + jobs[i]; box.appendChild(d); }
+    if (i < jobs.length) idleRun(step); else setTimeout(() => box.remove(), 1500); };
+  idleRun(step);
 }
 async function boot() {
   try { applyTheme(JSON.parse(localStorage.getItem('konto.theme'))); } catch {}      // o ecrã já nasce com o último tema usado
