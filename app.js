@@ -24,11 +24,14 @@ function migrateProfile(p) {
   p.bills = Array.isArray(p.bills) ? p.bills : [];        // contas de casa (renda, luz, água…)
   p.billLog = p.billLog && typeof p.billLog === 'object' && !Array.isArray(p.billLog) ? p.billLog : {};   // valor real das faturas: "idConta:AAAA-MM" → €
   p.bills.forEach(b => { b.created ||= now; });
+  p.ldp = p.ldp && typeof p.ldp === 'object' && !Array.isArray(p.ldp) ? p.ldp : null;      // animações de entrada favoritas deste perfil (laboratório)
   p.carFix = Array.isArray(p.carFix) ? p.carFix : [];                   // pagamentos fixos do automóvel (seguro, IUC…)
   p.carFix.forEach(c => { c.created ||= now; });
   p.incomes = Array.isArray(p.incomes) ? p.incomes : [];                 // ordenados (o que entra), para saber quanto resta
   p.incomes.forEach(i => { i.created ||= now; });
   p.earnings = Array.isArray(p.earnings) ? p.earnings : [];               // ganhos avulsos ou diários ("+ Ganho")
+  p.balanceNotice = !!p.balanceNotice;                                   // aviso no Início, nos primeiros dias do mês, do balanço do mês que fechou
+  p.noticeSeen = typeof p.noticeSeen === 'string' ? p.noticeSeen : '';
   p.earnCycle = p.earnCycle === 'week' ? 'week' : 'month';               // sem ordenado com dia certo, o "resta" conta o mês ou a semana
   p.shopRems = Array.isArray(p.shopRems) ? p.shopRems : [];            // lembretes das outras despesas do carro (óleo, pneus, inspeção…)
   p.vehicles = Array.isArray(p.vehicles) ? p.vehicles : [];             // veículos do combustível
@@ -605,6 +608,7 @@ const ICONS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   logout: '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><path d="M16 8l4 4-4 4M20 12H9"/>',
+  euroCoin: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.8a4 4 0 1 0 0 6.4M8 11h5.5M8 13.2h5.5"/>',
   wrench: '<path d="M7 10h3V7L6.5 3.5a6 6 0 0 1 8 8l6 6a2 2 0 0 1-3 3l-6-6a6 6 0 0 1-8-8L7 10z"/>',
   car: '<path d="M5 16l1.5-5.5A2 2 0 0 1 8.4 9h7.2a2 2 0 0 1 1.9 1.5L19 16"/><rect x="3" y="16" width="18" height="4" rx="1.5"/><circle cx="7.5" cy="18" r=".8"/><circle cx="16.5" cy="18" r=".8"/>',
   moto: '<circle cx="6" cy="16" r="3"/><circle cx="18" cy="16" r="3"/><path d="M6 16l4-6h5l3 6M10 10L9 7H7"/>',
@@ -889,6 +893,8 @@ function firstMonthIndex(p) {
   let min = n.getFullYear() * 12 + n.getMonth();
   for (const s of [...p.subs, ...p.bills, ...p.carFix]) min = Math.min(min, startIndex(s));
   for (const s of p.spends) min = Math.min(min, +s.date.slice(0, 4) * 12 + (+s.date.slice(5, 7) - 1));
+  for (const i of p.incomes) min = Math.min(min, startIndex(i));
+  for (const g of p.earnings) min = Math.min(min, +g.date.slice(0, 4) * 12 + (+g.date.slice(5, 7) - 1));
   for (const k in p.hlog) { const d = k.slice(k.indexOf(':') + 1); min = Math.min(min, +d.slice(0, 4) * 12 + (+d.slice(5, 7) - 1)); }
   return min;
 }
@@ -1167,8 +1173,7 @@ function vHome(p) {
     </div>
     <div id="resta">${restaHTML(p)}</div>
     <div id="summary">${summaryHTML(p)}</div>
-    <div id="medias">${mediasHTML(p)}</div>
-    ${nudge}${rem}
+    ${balanceNoticeHTML(p)}${nudge}${rem}
     <div id="calendar"></div>
   </section>`;
 }
@@ -1297,7 +1302,7 @@ function restaHTML(p) {
   const neg = r.left < 0, perDay = r.days > 0 ? r.left / r.days : 0, pend = pendingIncomes(p);
   const title = r.year ? 'Resta em ' + r.y : r.mode === 'week' ? 'Resta esta semana' : r.mode === 'month' ? 'Resta este mês' : 'Resta até ao próximo ordenado';
   const until = r.year ? 'até ao fim do ano' : r.mode === 'week' ? 'até ao fim da semana' : r.mode === 'month' ? 'até ao fim do mês' : 'até ao próximo ordenado, a ' + dayMon(r.next);
-  const pendHTML = pend.length ? `<div class="card resta-pend">${pend.map(e => `<button class="item" data-act="invoice" data-id="${e.inc.id}:${e.ym}"><div class="ic" style="background:#10b981">${ico('spend')}</div>
+  const pendHTML = pend.length ? `<div class="card resta-pend">${pend.map(e => `<button class="item" data-act="invoice" data-id="${e.inc.id}:${e.ym}"><div class="ic pillow shine">${ico('euroCoin')}</div>
       <div class="grow"><b>Quanto recebeste em ${MESES[e.date.getMonth()]}?</b><span>${esc(incomeName(e.inc))} · estimativa ${nf(e.v)} €</span></div></button>`).join('')}</div>` : '';
   return `${pendHTML}<div class="big-total resta-card">
       <button class="rest-add" data-act="add-earning">${ico('plus')} Ganho</button>
@@ -1317,13 +1322,52 @@ function refreshResta() {
   countUp(box.querySelector('.big-total b'), prev);
 }
 const payText = i => i.rule === 'weekly' ? `toda a ${WDAY_NAMES[i.wday]}` : i.rule === 'bizend' ? `${NTH_LABEL[i.nth || 3]} dia útil do mês` : `dia ${i.day}`;
+/* O que entrou num mês (ordenados e ganhos): para o calendário e para o balanço. Fica à parte dos gastos: nunca entra nos totais de gastos. */
+function incomesOn(p, y, m) {
+  const out = [];
+  for (const e of payEvents(p, new Date(y, m, 1), new Date(y, m, dim(y, m)))) {
+    if (e.date.getFullYear() * 12 + e.date.getMonth() < startIndex(e.inc)) continue;               // só conta desde o mês em que o ordenado foi criado
+    out.push({ kind: 'income', act: 'edit-income', id: e.inc.id, date: e.date, day: e.date.getDate(), amount: e.v, name: incomeName(e.inc), est: e.inc.variable && !e.real });
+  }
+  for (const g of p.earnings) if (g.date.startsWith(`${y}-${pad(m + 1)}-`)) out.push({ kind: 'earning', act: 'edit-earning', id: g.id, date: parseYmd(g.date), day: +g.date.slice(8), amount: g.amount, name: g.note || 'Ganho', est: false });
+  return out.sort((a, b) => a.day - b.day);
+}
+function monthBalance(p, y, m) {                                     // entrou − saiu num mês de calendário; o mês em curso é provisório ("até agora"); sem rendimento registado, não há balanço
+  const t = today0(), k = y * 12 + m, kt = t.getFullYear() * 12 + t.getMonth();
+  if (k > kt) return null;
+  const upto = k === kt ? t : new Date(y, m, dim(y, m));
+  const income = incomesOn(p, y, m).filter(i => i.date <= upto).reduce((a, i) => a + i.amount, 0);
+  if (!(income > 0)) return null;
+  const spent = spentBetween(p, new Date(y, m, 1), upto);
+  return { income, spent, diff: income - spent, open: k === kt };
+}
+const capital = t => t[0].toUpperCase() + t.slice(1);
+const balanceVerdict = (mes, d) => d > 0.004 ? `${mes} fechou a positivo: sobraram ${nf(d)} €.` : d < -0.004 ? `${mes} fechou a negativo: gastaste mais ${nf(-d)} € do que entrou.` : `${mes} fechou certo: gastaste o que entrou.`;
+function balanceHTML(p, y, m) {                                      // o balanço do mês, por baixo do calendário
+  const b = monthBalance(p, y, m); if (!b) return '';
+  const mes = capital(MESES[m]), cls = b.diff > 0.004 ? 'pos' : b.diff < -0.004 ? 'neg' : '';
+  const totals = `Entrou ${nf(b.income)} € · saiu ${nf(b.spent)} €`;
+  return b.open
+    ? `<div class="cal-bal open"><div class="t"><span>Balanço de ${MESES[m]}</span><span class="v1">até agora ${signed(b.diff)}</span></div><div class="sub">${totals}</div></div>`
+    : `<div class="cal-bal"><div class="t"><span>Balanço de ${MESES[m]}</span><b class="${cls}">${signed(b.diff)}</b></div><div class="sub">${balanceVerdict(mes, b.diff)}</div><div class="sub">${totals}</div></div>`;
+}
+function balanceNoticeHTML(p) {                                      // aviso opcional (Definições): nos primeiros dias do mês, como fechou o mês anterior
+  if (!p.balanceNotice) return '';
+  const t = today0(); if (t.getDate() > 5) return '';
+  const pm = new Date(t.getFullYear(), t.getMonth() - 1, 1), ym = ymOf(pm);
+  if (p.noticeSeen === ym) return '';
+  const b = monthBalance(p, pm.getFullYear(), pm.getMonth()); if (!b || b.open) return '';
+  const mes = capital(MESES[pm.getMonth()]), good = b.diff >= 0;
+  return `<button class="balance-note ${good ? 'good' : 'bad'}" data-act="dismiss-balance" data-v="${ym}"><span class="bn-ic">${ico(good ? 'check' : 'warn')}</span>
+    <span><b>${mes} fechou a ${good ? 'positivo' : 'negativo'}</b><br>${good ? `Sobraram ${nf(b.diff)} €.` : `Gastaste mais ${nf(-b.diff)} € do que entrou.`}</span></button>`;
+}
 function incomeMenuSheet() {                                         // ordenados e ganhos: tocar para editar, ou juntar outro
   const p = current(), recent = p.earnings.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
   openSheet(`<h2>Ordenados e ganhos</h2>
-    ${p.incomes.map(i => `<button class="item" data-act="edit-income" data-id="${i.id}"><div class="ic" style="background:#10b981">${ico('spend')}</div>
+    ${p.incomes.map(i => `<button class="item" data-act="edit-income" data-id="${i.id}"><div class="ic pillow shine">${ico('euroCoin')}</div>
       <div class="grow"><b>${esc(incomeName(i))}</b><span>${nf(curAmount(i))} € · ${payText(i)}${i.sub14 && i.rule !== 'weekly' ? ' · subsídios' : ''}</span></div></button>`).join('')}
     ${recent.length ? `<p class="hint" style="margin:14px 0 4px">Ganhos recentes</p>${recent.map(e => { const d = parseYmd(e.date);
-      return `<button class="item" data-act="edit-earning" data-id="${e.id}"><div class="ic" style="background:#0ea5e9">${ico('plus')}</div>
+      return `<button class="item" data-act="edit-earning" data-id="${e.id}"><div class="ic pillow">${ico('plus')}</div>
       <div class="grow"><b>${esc(e.note || 'Ganho')}</b><span>${d.getDate()} ${MESES[d.getMonth()].slice(0, 3)}</span></div><div class="amt pos">+${nf(e.amount)} €</div></button>`; }).join('')}` : ''}
     ${p.incomes.length ? '' : `<div class="field" style="margin-top:14px"><label>O resta conta</label><div class="chips">${[['month', 'O mês'], ['week', 'A semana']].map(([k, l]) => `<button type="button" class="chip ${p.earnCycle === k ? 'on' : ''}" data-act="earn-cycle" data-v="${k}" style="--c:var(--accent)">${l}</button>`).join('')}</div></div>`}
     <div class="stack"><button class="btn primary" data-act="add-earning">${ico('plus')} Registar ganho</button><button class="btn ghost" data-act="add-income">${ico('plus')} Adicionar ordenado</button></div>`);
@@ -1482,15 +1526,16 @@ function vCalendar(p) {
   const { y, m } = ui.cal;
   const calAnim = ui.calAnim || '', calPop = ui.calPop; ui.calAnim = ''; ui.calPop = null;   // animações de uma só vez: mudar de mês / escolher um dia
   const first = (new Date(y, m, 1).getDay() + 6) % 7;       // segunda = 0
-  const entries = entriesOn(p, y, m);
+  const entries = entriesOn(p, y, m), incs = incomesOn(p, y, m), incByDay = {};
+  incs.forEach(i => incByDay[i.day] = true);
   const byDay = {}; entries.forEach(e => (byDay[e.day] ||= []).push(e));
   const now = new Date();
   let cells = DOW.map(d => `<div class="dow">${d}</div>`).join('') + '<div class="day empty"></div>'.repeat(first);
   for (let d = 1; d <= dim(y, m); d++) {
     const isToday = now.getFullYear() === y && now.getMonth() === m && now.getDate() === d;
     const cats = [...new Set((byDay[d] || []).map(e => e.cat === 'fuel' ? 'shop' : e.cat))].slice(0, 3);
-    const dots = cats.map(c => `<i class="dot" style="background:${catOf(c).color}"></i>`).join('');
-    cells += `<button class="day ${isToday ? 'today' : ''} ${ui.cal.sel === d ? 'sel' : ''} ${calPop === d ? 'pop' : ''}" data-act="sel-day" data-d="${d}">${d}<span class="dots">${dots}</span></button>`;
+    const dots = cats.map(c => `<i class="dot" style="background:${catOf(c).color}"></i>`).join('') + '';
+    cells += `<button class="day ${isToday ? 'today' : ''} ${ui.cal.sel === d ? 'sel' : ''} ${calPop === d ? 'pop' : ''}" data-act="sel-day" data-d="${d}">${d}<span class="dots${cats.length + (incByDay[d] ? 1 : 0) > 3 ? ' many' : ''}">${incByDay[d] ? '<i class="dot inc"></i>' : ''}${dots}</span></button>`;
   }
   const dstr = d => `${y}-${pad(m + 1)}-${pad(d)}`;
   const shown = ui.cal.sel ? (byDay[ui.cal.sel] || []) : entries;
@@ -1525,8 +1570,10 @@ function vCalendar(p) {
   const title = ui.cal.sel ? `${ui.cal.sel} de ${MESES[m]}` : `Gastos de ${MESES[m]}`;
   const lim = ui.cal.limit || 20;                           // listas longas: mostra 20 de cada vez
   const more = shown.length > lim ? `<button class="more" data-act="more-cal">Ver mais (${shown.length - lim})</button>` : '';
-  const list = shown.length ? shown.slice(0, lim).map(e => entryHTML(e, ui.cal.sel ? '' : `Dia ${e.day}`)).join('') + more
-    : `<p class="muted small" style="padding:8px 0">Sem gastos ${ui.cal.sel ? 'neste dia' : 'neste mês'}.</p>`;
+  const incRows = (ui.cal.sel ? incs.filter(i => i.day === ui.cal.sel) : incs).map(i => `<button class="item" data-act="${i.act}" data-id="${i.id}"><div class="ic pillow${i.kind === 'income' ? ' shine' : ''}">${ico(i.kind === 'income' ? 'euroCoin' : 'plus')}</div>
+    <div class="grow"><b>${esc(i.name)}</b><span>${[i.kind === 'income' ? 'Ordenado' : i.name !== 'Ganho' ? 'Ganho' : '', i.est ? 'estimativa' : '', ui.cal.sel ? '' : 'Dia ' + i.day].filter(Boolean).join(' · ')}</span></div><div class="amt pos">+${nf(i.amount)} €</div></button>`).join('');
+  const list = incRows + (shown.length ? shown.slice(0, lim).map(e => entryHTML(e, ui.cal.sel ? '' : `Dia ${e.day}`)).join('') + more
+    : incRows ? '' : `<p class="muted small" style="padding:8px 0">Sem gastos ${ui.cal.sel ? 'neste dia' : 'neste mês'}.</p>`);
   return `<div class="card">
       <div class="cal-nav">
         <button data-act="cal-prev" aria-label="Mês anterior" ${y * 12 + m <= firstMonthIndex(p) ? 'disabled' : ''}>${ico('left')}</button>
@@ -1534,6 +1581,7 @@ function vCalendar(p) {
         <button data-act="cal-next" aria-label="Mês seguinte">${ico('right')}</button>
       </div>
       <div class="cal-grid ${calAnim}">${cells}</div>
+      ${balanceHTML(p, y, m)}
     </div>
     <div class="card">
       <div class="card-h"><h3>${title}</h3>${ui.cal.sel && shown.length < 2 ? '' : `<span class="neg" style="font-weight:700">${cost(headTotal)}</span>`}</div>
@@ -2326,19 +2374,6 @@ function avgStats(ai, unit) {                                  // os dois primei
   if (ai.avg === null) return [['—', 'média ' + un], unit === 'year' && ai.cur > 0 ? [eq(ai.proj), 'projeção do ano'] : ['—', 'sem histórico']];
   return [[eq(ai.avg), 'média ' + un], ai.diff === 0 ? ['na média', 'até agora'] : [avgDiff(ai.diff), ai.diff > 0 ? 'acima da média' : 'abaixo da média']];
 }
-const MED_TABS = [['day', 'Dia'], ['week', 'Semana'], ['month', 'Mês'], ['year', 'Ano']];
-function mediasHTML(p) {                                             // cartão do Início: o período atual de cada um, comparado com a sua média
-  const rows = [['spend', 'Dia-a-dia', spendSource], ['vices', 'Vícios', viceSource]].filter(([m]) => p.modules.includes(m));
-  if (!rows.length) return '';
-  const u = MED_TABS.some(x => x[0] === ui.mper) ? ui.mper : 'month';
-  return `<div class="card medias"><div class="seg four">${MED_TABS.map(([k, l]) => `<button data-act="mper-sum" data-v="${k}" class="${u === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-    <div class="med-grid">${rows.map(([, name, src]) => {
-      const ai = avgInfo(src(p), u), pct = ai.exp > .004 ? Math.round(ai.diff / ai.exp * 100) : null;
-      const note = ai.avg === null ? '<div class="d">sem histórico</div>' : pct === null ? (ai.diff > 0 ? '<div class="d up">acima da média</div>' : '<div class="d">na média</div>')
-        : pct === 0 ? '<div class="d">na média</div>' : `<div class="d ${pct > 0 ? 'up' : 'dn'}">${pct > 0 ? '↑' : '↓'} ${Math.abs(pct)}% da média</div>`;
-      return `<div class="med-tile"><div class="t">${name}</div><b>${cost(ai.cur)}</b>${note}</div>`; }).join('')}</div></div>`;
-}
-
 /* Visão geral de todos os hábitos (como no Início): gasto por período e divisão por hábito.
  * Inclui também os hábitos escondidos do calendário, porque aqui é o espaço deles. */
 function vSummaryHTML(p) {
@@ -2553,6 +2588,9 @@ function vManage(p) {
     <h3 class="section-h">Ícone dos vícios</h3>
     <div class="chips" style="--c:var(--accent)">${VICE_ICONS.map(([k, l]) => `<button class="chip ${on(viceIcon(), k)}" data-act="vice-icon" data-v="${k}">${ico(k)} ${l}</button>`).join('')}</div>
     <span class="hint" style="display:block;margin:8px 0 0">Muda o ícone em toda a app, só neste perfil.</span>
+
+    <h3 class="section-h">Avisos</h3>
+    <div class="switch-row" data-act="toggle-balance-notice"><div><b>Avisar do balanço do mês</b><div class="hint">Nos primeiros dias de cada mês, diz como fechou o mês anterior</div></div><div class="switch ${p.balanceNotice ? 'on' : ''}" id="bn-switch"></div></div>
 
     <h3 class="section-h">Aparência</h3>
     ${themeControls(p)}
@@ -3175,17 +3213,32 @@ function enterProfile(id) {
 /* Ecrã de carregamento ao abrir um perfil (cerca de 2,3 s): cartão com a foto do perfil, anel a rodar, mensagens e barra de progresso.
    O perfil é aberto por baixo enquanto o cartão está à frente, e o cartão desvanece no fim. */
 // Onze animações diferentes: a cada abertura sai uma ao acaso (nunca a mesma duas vezes seguidas), com mensagens também variadas.
-const LOADERS = ['ring', 'pulse', 'float', 'orbit', 'coins', 'chart', 'lock', 'sparkle', 'radar', 'heart', 'confetti'];
+const LOADERS = ['ring', 'pulse', 'float', 'orbit', 'coins', 'chart', 'lock', 'sparkle', 'radar', 'heart', 'confetti', 'tide', 'piggy', 'neon', 'digits', 'donut', 'shield', 'counter', 'aurora', 'duo', 'ripples', 'bubbles', 'stars', 'comet', 'flip', 'breathe', 'rainbow', 'clock', 'spinner', 'cards', 'petals', 'rays', 'sats', 'bounce', 'finger', 'wifi', 'battery', 'columns', 'euro', 'glass', 'dna', 'cradle', 'gears', 'snow', 'fireflies', 'bolt', 'moneyrain', 'planet', 'squares', 'hexagon', 'marquee', 'shimmer', 'fillrings', 'letters', 'halo', 'wave', 'cube', 'roller', 'drops', 'frame'];
+const LOADER_NAMES = { ring: 'Anel', pulse: 'Pulso', float: 'Flutuar', orbit: 'Órbita', coins: 'Moedas', chart: 'Gráfico', lock: 'Cadeado', sparkle: 'Brilhos', radar: 'Radar', heart: 'Coração', confetti: 'Confetes',
+  tide: 'Maré', piggy: 'Mealheiro', neon: 'Néon', digits: 'Números', donut: 'Donut', shield: 'Escudo', counter: 'Contador', aurora: 'Aurora' , duo: 'Duplo anel', ripples: 'Ondas', bubbles: 'Bolhas', stars: 'Estrelas', comet: 'Cometa', flip: 'Moeda', breathe: 'Respirar', rainbow: 'Arco-íris', clock: 'Relógio', spinner: 'Pontos', cards: 'Cartas', petals: 'Pétalas', rays: 'Raios', sats: 'Satélites', bounce: 'Saltar', finger: 'Impressão', wifi: 'Sinal', battery: 'Bateria', columns: 'Colunas', euro: 'Euro', glass: 'Ampulheta' , dna: 'Hélice', cradle: 'Pêndulo', gears: 'Engrenagens', snow: 'Neve', fireflies: 'Pirilampos', bolt: 'Arcos Elétricos', moneyrain: 'Chuva de euros', planet: 'Planeta', squares: 'Quadrados', hexagon: 'Hexágono', marquee: 'Comboio', shimmer: 'Reflexo', fillrings: 'Círculos', letters: 'Letras', halo: 'Halo', wave: 'Onda sonora', cube: 'Cubo', roller: 'Montanha-russa', drops: 'Gotas', frame: 'Moldura' };
+/* Preferências das animações de entrada (neste aparelho): quais podem sair, o tamanho do ícone do perfil e a velocidade. Abrem-se no laboratório secreto (10 toques no ícone do Konto). */
+const LD_DEFAULT = { sel: LOADERS.slice(0, 19),      // as 21 mais recentes vêm desligadas (ligam-se no laboratório)
+   size: 96, speed: 1 };
+function normLd(o) {
+  const sl = Array.isArray(o.sel) ? o.sel.filter(x => LOADERS.includes(x)) : LD_DEFAULT.sel;
+  return { sel: sl, size: Math.min(120, Math.max(64, +o.size || 96)), speed: Math.min(2, Math.max(.5, +o.speed || 1)) };
+}
+function ldPrefs(prof) {                                              // as do perfil (se guardou favoritas), senão as gerais deste aparelho
+  if (prof && prof.ldp) return normLd(prof.ldp);
+  try { const o = JSON.parse(localStorage.getItem('konto.ldprefs') || 'null'); if (o) return normLd(o); } catch {}
+  return { ...LD_DEFAULT };
+}
+function saveLdPrefs(o) { try { localStorage.setItem('konto.ldprefs', JSON.stringify(o)); } catch {} }
 const LD_MSGS = [
   ['A carregar o perfil…', 'A abrir o teu perfil…', 'A preparar o teu espaço…'],
   ['A preparar os teus dados…', 'A organizar as contas…', 'A pôr tudo em ordem…'],
-  ['A organizar o calendário…', 'A afinar os gráficos…', 'A dar cor ao teu perfil…'],
+  ['A organizar o calendário…', 'A afinar os gráficos…', 'A dar cor ao teu perfil…', 'Psst… toca 10× no K do início', 'Dica: o K esconde um laboratório'],
   ['Quase pronto…', 'Só mais um instante…', 'A finalizar…'],
 ];
 const pickOf = a => a[Math.floor(Math.random() * a.length)];
-function pickLoader() {
+function pickLoader(prof) {
   let last = ''; try { last = localStorage.getItem('konto.ld') || ''; } catch {}
-  const v = pickOf(LOADERS.filter(x => x !== last));
+  const sel = ldPrefs(prof).sel, pool = sel.length ? sel : LOADERS, v = pickOf(pool.length > 1 ? pool.filter(x => x !== last) : pool);        // só as escolhidas, sem repetir a anterior (se houver mais do que uma)
   try { localStorage.setItem('konto.ld', v); } catch {}
   return v;
 }
@@ -3204,6 +3257,56 @@ function loaderParts(kind, prof) {                                    // [parte 
     case 'radar': return [`<div class="ld-ring"><i class="ld-radar"></i><i class="ld-pulse"></i>${av}</div>`, bar];
     case 'heart': return [`<div class="ld-ring ld-beat">${av}</div>`, '<svg class="ld-ecg" viewBox="0 0 120 40" aria-hidden="true"><path d="M2 22 H34 L42 22 L48 6 L56 36 L62 22 H118"/></svg>'];
     case 'confetti': return [`<div class="ld-ring">${Array.from({ length: 10 }, (_, i) => `<i class="ld-cf" style="--a:${i * 36}deg;--d:${((i % 5) * .12).toFixed(2)}s;--c:${i % 3}"></i>`).join('')}${av}</div>`, dots];
+    case 'tide': { const wv = '<svg viewBox="0 0 200 22" preserveAspectRatio="none" aria-hidden="true"><path d="M0 11Q12.5 0 25 11T50 11T75 11T100 11T125 11T150 11T175 11T200 11V22H0Z"/></svg>';
+      return [`<div class="ld-ring ld-tide"><div class="tw">${wv}<i></i></div><div class="tw b">${wv}<i></i></div>${av}</div>`, dots]; }
+    case 'piggy': return [`<div class="ld-ring">${av}</div>`, '<div class="ld-jar"><svg viewBox="0 0 56 66" aria-hidden="true"><rect class="jf" x="10" y="26" width="36" height="34" rx="6"/><path class="jb" d="M12 7h32M14 7v7l-6 8v32a8 8 0 0 0 8 8h24a8 8 0 0 0 8-8V22l-6-8V7"/></svg><i>€</i><i>€</i><i>€</i></div>'];
+    case 'neon': return [`<div class="ld-ring ld-neon"><i class="nr"></i><i class="nr b"></i>${av}</div>`, '<div class="ld-neonline"></div>'];
+    case 'digits': return [`<div class="ld-ring ld-matrix">${Array.from({ length: 9 }, (_, i) => `<span class="ld-dg" style="--x:${6 + i * 13}px;--d:${(-((i * 7) % 9) * .35).toFixed(2)}s;--t:${(2.1 + (i % 4) * .35).toFixed(2)}s">${['€', '7', '0', '3', '€', '9', '1'].map((c, k) => (i + k) % 3 === 0 ? '€' : (i * 3 + k * 5) % 10).join('<br>')}</span>`).join('')}${av}</div>`, dots];
+    case 'donut': return [`<div class="ld-ring ld-donut"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ld-track" cx="66" cy="66" r="62"/>${[['#f97316', 112, 0], ['#6366f1', 78, 122], ['#0ea5e9', 92, 210], ['#10b981', 66, 312]].map(([c, len, off], i) => `<circle class="ld-seg" cx="66" cy="66" r="62" style="--c:${c};--len:${len};--off:${off};--d:${(i * .35).toFixed(2)}s"/>`).join('')}</svg>${av}</div>`, bar];
+    case 'shield': return [`<div class="ld-ring">${av}</div>`, '<svg class="ld-shield" viewBox="0 0 40 46" aria-hidden="true"><path pathLength="100" d="M20 3 35 9v13c0 10-7 17-15 21C12 39 5 32 5 22V9z"/><path class="ck" pathLength="100" d="M13 23l5.5 5.5L28 17"/></svg>'];
+    case 'counter': return [`<div class="ld-ring">${av}</div>`, '<div class="ld-count"><span class="num">0,00 €</span></div>'];
+    case 'aurora': return [`<div class="ld-ring ld-aurora"><i style="--c:var(--accent);--d:0s"></i><i style="--c:var(--accent-2);--d:-1.3s"></i><i style="--c:color-mix(in srgb, var(--accent) 45%, #fff);--d:-2.6s"></i>${av}</div>`, dots];
+    case 'duo': return [`<div class="ld-ring ld-x ld-duo"><i></i><i></i>${av}</div>`, bar];
+    case 'ripples': return [`<div class="ld-ring ld-x ld-rip"><i></i><i style="--d:.8s"></i><i style="--d:1.6s"></i>${av}</div>`, dots];
+    case 'bubbles': return [`<div class="ld-ring ld-x ld-bub">${Array.from({ length: 9 }, (_, k) => `<i style="--x:${8 + k * 10}%;--d:${((k * 5) % 9 * .27).toFixed(2)}s;--s:${6 + (k % 3) * 3}px"></i>`).join('')}${av}</div>`, bar];
+    case 'stars': return [`<div class="ld-ring ld-x ld-star">${Array.from({ length: 7 }, (_, k) => `<i style="--a:${k * 51.4}deg;--d:${(k * .22).toFixed(2)}s">✦</i>`).join('')}${av}</div>`, dots];
+    case 'comet': return [`<div class="ld-ring ld-x ld-comet"><i></i>${av}</div>`, bar];
+    case 'flip': return [`<div class="ld-ring ld-x ld-flip"><i></i>${av}</div>`, dots];
+    case 'breathe': return [`<div class="ld-ring ld-x ld-breathe"><i></i>${av}</div>`, dots];
+    case 'rainbow': return [`<div class="ld-ring ld-x ld-rainbow"><i></i>${av}</div>`, bar];
+    case 'clock': return [`<div class="ld-ring ld-x ld-clock">${Array.from({ length: 12 }, (_, k) => `<i style="--k:${k}"></i>`).join('')}${av}</div>`, bar];
+    case 'spinner': return [`<div class="ld-ring ld-x ld-spin8">${Array.from({ length: 8 }, (_, k) => `<i style="--k:${k}"></i>`).join('')}${av}</div>`, dots];
+    case 'cards': return [`<div class="ld-ring ld-x ld-cards"><i style="--r:-16deg"></i><i style="--r:12deg"></i><i style="--r:30deg"></i>${av}</div>`, bar];
+    case 'petals': return [`<div class="ld-ring ld-x ld-petal">${Array.from({ length: 8 }, (_, k) => `<i style="--a:${k * 45}deg;--d:${(k * .15).toFixed(2)}s"></i>`).join('')}${av}</div>`, dots];
+    case 'rays': return [`<div class="ld-ring ld-x ld-rays"><i></i>${av}</div>`, bar];
+    case 'sats': return [`<div class="ld-ring ld-x ld-sats"><i></i><i></i>${av}</div>`, dots];
+    case 'bounce': return [`<div class="ld-ring ld-x ld-bounce"><i></i>${av}</div>`, dots];
+    case 'finger': return [`<div class="ld-ring ld-x ld-fp"><svg viewBox="0 0 100 100" aria-hidden="true"><circle r="47" cx="50" cy="50"/><circle r="40" cx="50" cy="50"/><circle r="33" cx="50" cy="50"/></svg>${av}</div>`, bar];
+    case 'wifi': return [`<div class="ld-ring">${av}</div>`, '<svg class="ld-wifi" viewBox="0 0 40 32" aria-hidden="true"><path d="M3 12a24 24 0 0 1 34 0"/><path d="M9 18a15 15 0 0 1 22 0"/><path d="M14.5 24a7.5 7.5 0 0 1 11 0"/><circle cx="20" cy="29" r="2"/></svg>'];
+    case 'battery': return [`<div class="ld-ring">${av}</div>`, '<div class="ld-batt"><i></i></div>'];
+    case 'columns': return [`<div class="ld-ring">${av}</div>`, `<div class="ld-cols">${[.35, .55, .8, .6, 1].map((h, k) => `<i style="--h:${h};--d:${(k * .12).toFixed(2)}s"></i>`).join('')}</div>`];
+    case 'euro': return [`<div class="ld-ring">${av}</div>`, '<div class="ld-eur"><i>€</i></div>'];
+    case 'glass': return [`<div class="ld-ring">${av}</div>`, '<svg class="ld-glass" viewBox="0 0 40 52" aria-hidden="true"><g class="hg"><path class="o" d="M8 4h24M8 48h24M10 4c0 14 8 16 10 22-2 6-10 8-10 22M30 4c0 14-8 16-10 22 2 6 10 8 10 22"/><path class="t" d="M12 7h16c-1 8-6 11-8 15-2-4-7-7-8-15z"/><path class="b" d="M20 30c-2 5-7 7-8 14h16c-1-7-6-9-8-14z"/></g></svg>'];
+    case 'dna': return [`<div class="ld-ring">${av}</div>`, `<div class="ld-dna">${Array.from({ length: 9 }, (_, k) => `<i style="--k:${k}"></i>`).join('')}</div>`];
+    case 'cradle': return [`<div class="ld-ring">${av}</div>`, '<div class="ld-cradle"><i></i><i></i><i></i><i></i><i></i></div>'];
+    case 'gears': return [`<div class="ld-ring ld-x ld-gear"><i></i><i></i>${av}</div>`, bar];
+    case 'snow': return [`<div class="ld-ring ld-x ld-snow">${Array.from({ length: 10 }, (_, k) => `<i style="--x:${4 + k * 10}%;--d:${((k * 7) % 10 * .22).toFixed(2)}s;--s:${11 + (k % 3) * 4}px">❄</i>`).join('')}${av}</div>`, dots];
+    case 'fireflies': return [`<div class="ld-ring ld-x ld-ff">${Array.from({ length: 9 }, (_, k) => `<i style="--x:${10 + (k * 37) % 80}%;--y:${8 + (k * 53) % 84}%;--dx:${(k % 3 - 1) * 14}px;--dy:${((k + 1) % 3 - 1) * 14}px;--d:${(k * .33).toFixed(2)}s"></i>`).join('')}${av}</div>`, dots];
+    case 'bolt': return [`<div class="ld-ring ld-x ld-bl"><i></i><i></i>${av}</div>`, bar];
+    case 'moneyrain': return [`<div class="ld-ring ld-x ld-snow ld-mrain">${Array.from({ length: 8 }, (_, k) => `<i style="--x:${6 + k * 12}%;--d:${((k * 5) % 8 * .2).toFixed(2)}s;--s:${13 + (k % 3) * 3}px">€</i>`).join('')}${av}</div>`, bar];
+    case 'planet': return [`<div class="ld-ring ld-x ld-planet"><i></i>${av}</div>`, dots];
+    case 'squares': return [`<div class="ld-ring ld-x ld-sq"><i></i><i></i>${av}</div>`, bar];
+    case 'hexagon': return [`<div class="ld-ring ld-x ld-hex"><i></i>${av}</div>`, bar];
+    case 'marquee': return [`<div class="ld-ring">${av}</div>`, '<div class="ld-march"><i></i><i style="--d:.25s"></i><i style="--d:.5s"></i><i style="--d:.75s"></i></div>'];
+    case 'shimmer': return [`<div class="ld-ring">${av}</div>`, '<div class="ld-shim"></div>'];
+    case 'fillrings': return [`<div class="ld-ring">${av}</div>`, `<div class="ld-frs">${[0, 1, 2].map(k => `<svg viewBox="0 0 24 24" style="--d:${(k * .55).toFixed(2)}s" aria-hidden="true"><circle class="t" cx="12" cy="12" r="9"/><circle class="f" cx="12" cy="12" r="9"/></svg>`).join('')}</div>`];
+    case 'letters': return [`<div class="ld-ring">${av}</div>`, `<div class="ld-ltr">${'Konto'.split('').map((c, k) => `<i style="--k:${k}">${c}</i>`).join('')}</div>`];
+    case 'halo': return [`<div class="ld-ring ld-x ld-halo"><i></i>${av}</div>`, dots];
+    case 'wave': return [`<div class="ld-ring">${av}</div>`, '<svg class="ld-sine" viewBox="0 0 120 26" aria-hidden="true"><path d="M0 13Q15-1 30 13T60 13T90 13T120 13T150 13T180 13T210 13T240 13"/></svg>'];
+    case 'cube': return [`<div class="ld-ring">${av}</div>`, '<div class="ld-cube"><div class="c"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>'];
+    case 'roller': return [`<div class="ld-ring">${av}</div>`, '<div class="ld-roll"><svg viewBox="0 0 120 30" aria-hidden="true"><path d="M0 15Q15-5 30 15T60 15T90 15T120 15"/></svg><i></i></div>'];
+    case 'drops': return [`<div class="ld-ring ld-x ld-drop">${[18, 50, 82].map((x, k) => `<i class="d" style="--x:${x}%;--d:${(k * .55).toFixed(2)}s"></i><i class="r" style="--x:${x}%;--d:${(k * .55).toFixed(2)}s"></i>`).join('')}${av}</div>`, dots];
+    case 'frame': return [`<div class="ld-ring ld-x ld-frame"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>${av}</div>`, bar];
     default: return [`<div class="ld-ring"><svg viewBox="0 0 132 132" aria-hidden="true"><circle class="ld-track" cx="66" cy="66" r="62"/><circle class="ld-arc" cx="66" cy="66" r="62"/></svg>${av}</div>`, bar];
   }
 }
@@ -3213,7 +3316,7 @@ function openWithLoading(prof, forceKind) {
   ui.loading = true;
   applyTheme(themeOf(prof));                                         // já com as cores do perfil que vai abrir
   closeSheet();                                                      // a janela da senha, se houver
-  const kind = forceKind || pickLoader(), [top, ind] = loaderParts(kind, prof), msgs = LD_MSGS.map(pickOf);
+  const kind = forceKind || pickLoader(prof), [top, ind] = loaderParts(kind, prof), msgs = LD_MSGS.map(pickOf);
   const ov = document.createElement('div'); ov.className = 'ld'; ov.dataset.loader = kind;
   ov.setAttribute('role', 'status'); ov.setAttribute('aria-live', 'polite');
   ov.innerHTML = `<div class="ld-card">
@@ -3223,11 +3326,135 @@ function openWithLoading(prof, forceKind) {
       ${ind}
       <div class="ld-brand">Konto</div>
     </div>`;
-  document.body.appendChild(ov);
+  document.body.appendChild(ov); applyLdLook(ov, ldPrefs(prof));
   const msg = ov.querySelector('.ld-msg');
   msgs.slice(1).forEach((t, i) => setTimeout(() => { msg.textContent = t; msg.classList.remove('swap'); void msg.offsetWidth; msg.classList.add('swap'); }, 650 * (i + 1)));
   setTimeout(() => enterProfile(prof.id), 350);                      // o trabalho a sério, por baixo do cartão
   setTimeout(() => { ov.classList.add('out'); setTimeout(() => { ov.remove(); ui.loading = false; }, 480); }, 2300);
+}
+
+/* O aspeto das animações de entrada (tamanho do ícone do perfil, velocidade) e o contador, que precisa de um pouco de JS. */
+function applyLdLook(root, pr) {
+  pr = pr || ldPrefs();
+  root.style.setProperty('--ld-av', pr.size + 'px');
+  requestAnimationFrame(() => { for (const a of root.getAnimations({ subtree: true })) a.playbackRate = pr.speed; });
+  root.querySelectorAll('.ld-count').forEach(el => {
+    const num = el.querySelector('.num'), t0 = performance.now(); let target = 900 + Math.random() * 2400, lap = 0;
+    (function tick(now) {
+      if (!el.isConnected) return;
+      const k = ((now - t0) * pr.speed / 1900), l = Math.floor(k), f = k - l;
+      if (l !== lap) { lap = l; target = 900 + Math.random() * 2400; }
+      num.textContent = nf(target * (1 - Math.pow(1 - Math.min(1, f / .8), 3))) + ' €';
+      requestAnimationFrame(tick);
+    })(t0);
+  });
+}
+/* Laboratório secreto: 10 toques no ícone do Konto (ecrã de boas-vindas). O ícone aproxima-se, treme e expande até ocupar a janela; lá dentro escolhes
+   quais animações de entrada podem aparecer, o tamanho do ícone do perfil e a velocidade. Tudo fica guardado neste aparelho. */
+const egg = { n: 0, t: 0, busy: false };
+document.addEventListener('click', e => {
+  const logo = e.target.closest?.('.logo'); if (!logo || egg.busy || document.querySelector('.lab, .egg')) return;
+  const now = Date.now(); egg.n = now - egg.t < 1600 ? egg.n + 1 : 1; egg.t = now;
+  logo.animate([{ transform: 'scale(1)' }, { transform: 'scale(.9)' }, { transform: 'scale(1)' }], { duration: 160 });         // um pequeno toque a cada clique
+  if (egg.n >= 10) { egg.n = 0; startLab(logo); }
+});
+async function startLab(logo) {
+  egg.busy = true;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) { openLab(); egg.busy = false; return; }
+  const r = logo.getBoundingClientRect(), vw = innerWidth, vh = innerHeight;
+  const ov = document.createElement('div'); ov.className = 'egg';
+  const ic = logo.cloneNode(true); ic.className = 'logo egg-ic';
+  Object.assign(ic.style, { position: 'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', margin: '0', zIndex: '2' });
+  ov.appendChild(ic); document.body.appendChild(ov); logo.style.visibility = 'hidden';
+  const dx = vw / 2 - (r.left + r.width / 2), dy = vh / 2 - (r.top + r.height / 2), fin = { fill: 'forwards' };
+  await ov.animate([{ background: 'rgba(0,0,0,0)' }, { background: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0b0b0c' }], { duration: 420, ...fin }).finished;      // esconde o resto da página
+  await ic.animate([{ transform: 'translate(0,0) scale(1)' }, { transform: `translate(${dx}px, ${dy}px) scale(2.3)` }], { duration: 620, easing: 'cubic-bezier(.2,.8,.2,1)', ...fin }).finished;      // zoom
+  const base = `translate(${dx}px, ${dy}px) scale(2.3)`;
+  await ic.animate(Array.from({ length: 25 }, (_, i) => { const k = i / 24, amp = 2 + k * 9, sg = i % 2 ? 1 : -1;
+    return { transform: `${base} rotate(${(sg * amp * (.6 + (i % 3) * .2)).toFixed(1)}deg) translateX(${(-sg * amp * .5).toFixed(1)}px)`, offset: k }; }), { duration: 1250, easing: 'linear', ...fin }).finished;      // abana e treme
+  const lab = openLab();
+  await burst(ov, ic, lab, vw / 2, vh / 2);                  // o ícone estala em partículas e mostra o laboratório
+  ov.remove(); logo.style.visibility = ''; egg.busy = false;
+}
+async function burst(ov, ic, lab, cx, cy) {
+  const vw = innerWidth, vh = innerHeight, maxR = Math.hypot(Math.max(cx, vw - cx), Math.max(cy, vh - cy)), fin = { fill: 'forwards' };
+  const fx = document.createElement('div'); Object.assign(fx.style, { position: 'fixed', inset: '0', zIndex: '10002', pointerEvents: 'none', overflow: 'hidden' }); document.body.appendChild(fx);
+  lab.style.zIndex = '10001'; lab.style.opacity = '';
+  ic.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 80, ...fin });
+  for (let i = 0; i < 30; i++) {
+    const a = Math.random() * Math.PI * 2, d = (.25 + Math.random() * .65) * maxR, sz = 8 + Math.random() * 7, q = document.createElement('div');
+    Object.assign(q.style, { position: 'absolute', left: cx - sz / 2 + 'px', top: cy - sz / 2 + 'px', width: sz + 'px', height: sz + 'px', borderRadius: '2px', background: 'linear-gradient(135deg,#34d399,#6366f1)' }); fx.appendChild(q);
+    q.animate([{ transform: 'translate(0,0) rotate(0)', opacity: 1 }, { transform: `translate(${Math.cos(a) * d}px, ${Math.sin(a) * d}px) rotate(${Math.round(Math.random() * 500 - 250)}deg)`, opacity: 0 }], { duration: 900, easing: 'cubic-bezier(.1,.7,.3,1)', ...fin });
+  }
+  await lab.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 550, delay: 150, fill: 'both' }).finished; await new Promise(r => setTimeout(r, 400));
+  lab.getAnimations().forEach(a => a.cancel()); lab.style.zIndex = ''; lab.style.opacity = ''; fx.remove();
+}
+function openLab() {
+  const g = ldPrefs(), sel = new Set(g.sel); let cur = '', size = g.size, speed = g.speed;
+  const lab = document.createElement('div'); lab.className = 'lab'; lab.setAttribute('role', 'dialog'); lab.setAttribute('aria-label', 'Animações de entrada');
+  const tile = k => `<button type="button" class="lab-tile${sel.has(k) ? ' on' : ''}" data-id="${k}" aria-pressed="${sel.has(k)}"><div class="lab-prev" data-loader="${k}"><div class="lab-s">${loaderParts(k, { name: 'K' }).join('')}</div></div><span>${LOADER_NAMES[k]}</span><i class="lab-chk">${ico('check')}</i></button>`;
+  const profs = (db.profiles || []);
+  lab.innerHTML = `<div class="lab-head"><button type="button" class="lab-back" aria-label="Fechar">${ico('left')}</button><div><h2>Animações de entrada</h2><p>Toca para ligar ou desligar. Só as ligadas aparecem ao abrir um perfil.</p></div></div>
+    ${profs.length ? `<h3 class="lab-sec">Perfil</h3><div class="lab-chips" id="lab-profs"><button type="button" class="lab-pchip on" data-p="">Geral</button>${profs.map(p => `<button type="button" class="lab-pchip" data-p="${esc(p.id)}">${esc(p.name)}</button>`).join('')}</div>
+    <p class="lab-hint" id="lab-phint">Estas são as escolhas gerais, usadas por todos os perfis que não tenham favoritas.</p>` : ''}
+    <div class="lab-grid">${LOADERS.map(tile).join('')}</div>
+    <div class="lab-ctl"><div class="lab-row"><label for="lab-size">Tamanho do ícone</label><b id="lab-size-v">${size}</b></div><input type="range" id="lab-size" class="lab-range" min="64" max="120" step="4" value="${size}">
+      <div class="lab-row"><label for="lab-speed">Velocidade</label><b id="lab-speed-v">${String(speed).replace('.', ',')}×</b></div><input type="range" id="lab-speed" class="lab-range" min="0.5" max="2" step="0.25" value="${speed}">
+      <button type="button" class="btn ghost lab-reset" id="lab-reset">Redefinir sliders</button></div>
+    <div class="lab-act"><button type="button" class="btn ghost" id="lab-all">Ligar todas</button><button type="button" class="btn ghost" id="lab-none">Desligar todas</button><button type="button" class="btn primary" id="lab-test">Experimentar</button></div>
+    <div class="lab-act" id="lab-pact" hidden><button type="button" class="btn ghost" id="lab-pclear">Usar as gerais</button><button type="button" class="btn primary" id="lab-psave">Guardar neste perfil</button></div>`;
+  document.body.appendChild(lab); applyLdLook(lab, { size, speed });
+  const cfg = () => ({ sel: LOADERS.filter(k => sel.has(k)), size, speed });
+  const save = () => { if (!cur) saveLdPrefs(cfg()); };               // com um perfil escolhido, é um rascunho até carregares em "Guardar neste perfil"
+  const paint = () => {
+    lab.querySelectorAll('.lab-tile').forEach(t => { const on = sel.has(t.dataset.id); t.classList.toggle('on', on); t.setAttribute('aria-pressed', on); });
+    lab.querySelector('#lab-size').value = size; lab.querySelector('#lab-size-v').textContent = size;
+    lab.querySelector('#lab-speed').value = speed; lab.querySelector('#lab-speed-v').textContent = String(speed).replace('.', ',') + '×';
+    applyLdLook(lab, { size, speed });
+  };
+  const choose = id => {                                               // muda de perfil: carrega as favoritas dele (ou as gerais)
+    cur = id; const pf = profs.find(p => p.id === id), pr = ldPrefs(pf);
+    lab.querySelectorAll('.lab-tile').forEach(t => { t.querySelector('.lab-s').innerHTML = loaderParts(t.dataset.id, pf || { name: 'K' }).join(''); });      // a foto do perfil no lugar do K
+    sel.clear(); pr.sel.forEach(k => sel.add(k)); size = pr.size; speed = pr.speed;
+    lab.querySelectorAll('.lab-pchip').forEach(c => c.classList.toggle('on', c.dataset.p === id));
+    const act = lab.querySelector('#lab-pact'); if (act) act.hidden = !pf;
+    const hint = lab.querySelector('#lab-phint');
+    if (hint) hint.textContent = pf ? (pf.ldp ? `Favoritas de ${pf.name}. Mexe e carrega em "Guardar" para as atualizar.` : `${pf.name} usa as escolhas gerais. Mexe e carrega em "Guardar" para ter as suas.`) : 'Estas são as escolhas gerais, usadas por todos os perfis que não tenham favoritas.';
+    const sv = lab.querySelector('#lab-psave'); if (sv && pf) sv.textContent = `Guardar em ${pf.name}`;
+    const cl = lab.querySelector('#lab-pclear'); if (cl && pf) cl.hidden = !pf.ldp;
+    paint();
+  };
+  lab.addEventListener('click', e => {
+    const pc = e.target.closest('.lab-pchip'); if (pc) return choose(pc.dataset.p);
+    if (e.target.closest('#lab-psave')) { const pf = profs.find(p => p.id === cur); if (!pf) return; pf.ldp = cfg(); saveDB(); lab.querySelector('#lab-pclear').hidden = false; lab.querySelector('#lab-phint').textContent = `Favoritas de ${pf.name} guardadas.`; return toast(`Guardado em ${pf.name}`); }
+    if (e.target.closest('#lab-pclear')) { const pf = profs.find(p => p.id === cur); if (!pf) return; pf.ldp = null; saveDB(); choose(cur); return toast(`${pf.name} volta a usar as gerais`); }
+    if (e.target.closest('#lab-reset')) { size = 96; speed = 1; paint(); save(); return; }
+    const t = e.target.closest('.lab-tile');
+    if (t) {
+      if (sel.has(t.dataset.id) && sel.size === 1) return toast('Fica pelo menos uma ligada');
+      sel.has(t.dataset.id) ? sel.delete(t.dataset.id) : sel.add(t.dataset.id); paint(); save(); return;
+    }
+    if (e.target.closest('#lab-none')) { const keep = LOADERS.find(k => sel.has(k)) || LOADERS[0]; sel.clear(); sel.add(keep); paint(); save(); return toast('Fica pelo menos uma ligada'); }
+    if (e.target.closest('#lab-all')) { LOADERS.forEach(k => sel.add(k)); paint(); save(); return; }
+    if (e.target.closest('#lab-test')) return testLoader(sel, { size, speed }, profs.find(p => p.id === cur));
+    if (e.target.closest('.lab-back')) { const an = lab.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: 'forwards' }); an.onfinish = () => lab.remove(); }
+  });
+  lab.addEventListener('input', e => {
+    if (e.target.id !== 'lab-size' && e.target.id !== 'lab-speed') return;
+    size = +lab.querySelector('#lab-size').value; speed = +lab.querySelector('#lab-speed').value;
+    lab.querySelector('#lab-size-v').textContent = size; lab.querySelector('#lab-speed-v').textContent = String(speed).replace('.', ',') + '×';
+    save(); applyLdLook(lab, { size, speed });
+  });
+  return lab;
+}
+function testLoader(sel, look, prof) {                                     // mostra uma animação de entrada de verdade (das ligadas), sem abrir nenhum perfil
+  if (document.querySelector('.ld')) return;
+  const pool = [...sel], kind = pickOf(pool), [top, ind] = loaderParts(kind, prof || { name: 'K' });
+  const ov = document.createElement('div'); ov.className = 'ld'; ov.dataset.loader = kind; ov.style.zIndex = '10001';
+  ov.innerHTML = `<div class="ld-card">${top}<h2>${prof ? esc(prof.name) : LOADER_NAMES[kind]}</h2><p class="ld-msg">A experimentar…</p>${ind}<div class="ld-brand">Konto</div></div>`;
+  document.body.appendChild(ov); applyLdLook(ov, look);
+  setTimeout(() => { ov.classList.add('out'); setTimeout(() => ov.remove(), 480); }, 2300);
 }
 
 async function notifyDue() {
@@ -3896,7 +4123,8 @@ case 'pg': { const k = el.dataset.k; goPage(k, el.dataset.to !== undefined ? +el
     }
     case 'vperiod-sum': setVPeriod(el.dataset.v); break;
     case 'sper-sum': ui.sper = el.dataset.v; refreshSubs(); break;
-    case 'mper-sum': { ui.mper = el.dataset.v; const box = document.getElementById('medias'); if (box) swapBox(box, mediasHTML(p)); break; }
+    case 'toggle-balance-notice': p.balanceNotice = !p.balanceNotice; saveDB(); $('#bn-switch').classList.toggle('on', p.balanceNotice); break;
+    case 'dismiss-balance': p.noticeSeen = el.dataset.v; saveDB(); render(); break;
     case 'income-menu': p.incomes.length === 1 && !p.earnings.length ? incomeSheet(p.incomes[0]) : incomeMenuSheet(); break;
     case 'add-earning': earningSheet(); break;
     case 'edit-earning': earningSheet(p.earnings.find(x => x.id === el.dataset.id)); break;

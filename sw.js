@@ -1,5 +1,5 @@
 // Service worker: cache-first, para a app funcionar 100% offline.
-const CACHE = 'konto-v270';
+const CACHE = 'konto-v295';
 const FILES = ['./', './index.html', './styles.css', './storage.js', './brands.js', './app.js', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
@@ -16,7 +16,7 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || !e.request.url.startsWith(self.location.origin)) return;
-  // Rede primeiro (apanha sempre a versão nova); cache só quando estiver offline.
+  // Rede primeiro (apanha sempre a vers??o nova); cache s?? quando estiver offline.
   e.respondWith(
     fetch(e.request)
       .then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return res; })
