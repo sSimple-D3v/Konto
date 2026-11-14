@@ -1455,6 +1455,19 @@ function setPeriod(k, slide) {                    // slide = true só quando vem
   const p = current(), old = PERIODS.findIndex(x => x[0] === ui.period), nu = PERIODS.findIndex(x => x[0] === k);
   if (!p || nu < 0 || old === nu) return;
   const prev = Number(document.querySelector('#summary .sum-total')?.dataset.v) || 0;
+  const seg0 = document.querySelector('#summary .summary > .seg');
+  if (!slide && seg0) {                                                       // toque nos botões: o destaque começa a deslizar já; as contas entram logo a seguir (não competem pelo mesmo fotograma)
+    ui.period = k; seg0.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === k)); syncSegs();
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (ui.period !== k || !document.getElementById('summary')) return;                 // entretanto mudou de período ou de separador
+      const tpl = document.createElement('template'); tpl.innerHTML = summaryHTML(p);
+      const nc = tpl.content.querySelector('.summary'), card = document.querySelector('#summary .summary');
+      if (!card || !nc || !card.querySelector(':scope > .seg')) $('#summary').innerHTML = summaryHTML(p);
+      else { [...card.children].forEach(c => { if (!c.classList.contains('seg')) c.remove(); }); [...nc.children].forEach(c => { if (!c.classList.contains('seg')) card.appendChild(c); }); }
+      refreshResta(); const st = document.querySelector('#summary .sum-total'); if (st) countUp(st, prev);
+    }));
+    return;
+  }
   const oldSeg = document.querySelector('#summary .seg'), ox = oldSeg?.style.getPropertyValue('--sx'), ow = oldSeg?.style.getPropertyValue('--sw');
   ui.period = k; $('#summary').innerHTML = summaryHTML(p); refreshResta();
   const newSeg = document.querySelector('#summary .seg');
