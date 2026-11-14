@@ -1393,3 +1393,14 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 46px; 
 @keyframes ldxFrm { 0%, 100% { translate: 0 0; } 50% { translate: var(--tx) var(--ty); } }
 .lab-s .ld-dna, .lab-s .ld-cradle, .lab-s .ld-frs, .lab-s .ld-ltr, .lab-s .ld-sine, .lab-s .ld-cube, .lab-s .ld-roll { margin-top: 10px; }
 .lab-s .ld-march, .lab-s .ld-shim { width: 110px; margin: 16px auto 0; }
+
+/* ---- fluidez: laboratório e janela Aparência ---- */
+.lab { overscroll-behavior: contain; contain: layout style; }
+.lab-tile { contain: layout paint style; }
+.lab-prev:not(.live) *, .lab-prev:not(.live) *::before, .lab-prev:not(.live) *::after { animation: none !important; }
+body.lab-open #app *, body.lab-open #app *::before, body.lab-open #app *::after,
+body.pausing #app *, body.pausing #app *::before, body.pausing #app *::after { animation-play-state: paused !important; }
+.fx-range, .lab-range { touch-action: pan-y; }
+
+.lab.scrolling .lab-prev *, .lab.scrolling .lab-prev *::before, .lab.scrolling .lab-prev *::after { animation-play-state: paused !important; }
+.offscr, .offscr *, .offscr *::before, .offscr *::after { animation-play-state: paused !important; }

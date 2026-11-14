@@ -2512,7 +2512,7 @@ function fitPagers() { document.querySelectorAll('.pager').forEach(fitPager); }
 function goPage(kind, to) {
   const box = document.getElementById(kind + '-wrap'); if (!box) return;
   const pages = +box.dataset.pages, i = Math.max(0, Math.min(pages - 1, to));
-  (ui.page ||= {})[kind] = i; fitPager(box);
+  (ui.page ||= {})[kind] = i; fitPager(box); pauseFx(460);
   box.querySelector('.pager-track').style.transform = `translateX(-${i * 100}%)`;
   box.querySelectorAll('.pg-dot').forEach((d, n) => d.classList.toggle('on', n === i));
   box.querySelector('[data-d="-1"]')?.toggleAttribute('disabled', i === 0);
@@ -3339,10 +3339,11 @@ function applyLdLook(root, pr) {
   root.style.setProperty('--ld-av', pr.size + 'px');
   requestAnimationFrame(() => { for (const a of root.getAnimations({ subtree: true })) a.playbackRate = pr.speed; });
   root.querySelectorAll('.ld-count').forEach(el => {
+    el.__sp = pr.speed; if (el.__tk) return; el.__tk = 1;                          // um só ciclo por contador (a velocidade lê-se de __sp)
     const num = el.querySelector('.num'), t0 = performance.now(); let target = 900 + Math.random() * 2400, lap = 0;
     (function tick(now) {
       if (!el.isConnected) return;
-      const k = ((now - t0) * pr.speed / 1900), l = Math.floor(k), f = k - l;
+      const k = ((now - t0) * el.__sp / 1900), l = Math.floor(k), f = k - l;
       if (l !== lap) { lap = l; target = 900 + Math.random() * 2400; }
       num.textContent = nf(target * (1 - Math.pow(1 - Math.min(1, f / .8), 3))) + ' €';
       requestAnimationFrame(tick);
@@ -3405,6 +3406,14 @@ function openLab() {
     <div class="lab-act"><button type="button" class="btn ghost" id="lab-all">Ligar todas</button><button type="button" class="btn ghost" id="lab-none">Desligar todas</button><button type="button" class="btn primary" id="lab-test">Experimentar</button></div>
     <div class="lab-act" id="lab-pact" hidden><button type="button" class="btn ghost" id="lab-pclear">Usar as gerais</button><button type="button" class="btn primary" id="lab-psave">Guardar neste perfil</button></div>`;
   document.body.appendChild(lab); applyLdLook(lab, { size, speed });
+  document.body.classList.add('lab-open');                              // a página por baixo fica parada (está tapada): sobra tudo para o laboratório
+  const live = pv => { for (const a of pv.getAnimations({ subtree: true })) a.playbackRate = speed; };
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(en => {      // só animam os mosaicos que se veem
+    en.target.classList.toggle('live', en.isIntersecting); if (en.isIntersecting) requestAnimationFrame(() => live(en.target));
+  }), { root: lab, rootMargin: '140px 0px' }) : null;
+  lab.querySelectorAll('.lab-prev').forEach(pv => io ? io.observe(pv) : pv.classList.add('live'));
+  let sq = 0, st = 0, sc = 0;
+  lab.addEventListener('scroll', () => { lab.classList.add('scrolling'); clearTimeout(sc); sc = setTimeout(() => lab.classList.remove('scrolling'), 160); }, { passive: true });      // a deslizar, as animações param (o scroll fica livre) e voltam logo a seguir
   const cfg = () => ({ sel: LOADERS.filter(k => sel.has(k)), size, speed });
   const save = () => { if (!cur) saveLdPrefs(cfg()); };               // com um perfil escolhido, é um rascunho até carregares em "Guardar neste perfil"
   const paint = () => {
@@ -3438,13 +3447,14 @@ function openLab() {
     if (e.target.closest('#lab-none')) { const keep = LOADERS.find(k => sel.has(k)) || LOADERS[0]; sel.clear(); sel.add(keep); paint(); save(); return toast('Fica pelo menos uma ligada'); }
     if (e.target.closest('#lab-all')) { LOADERS.forEach(k => sel.add(k)); paint(); save(); return; }
     if (e.target.closest('#lab-test')) return testLoader(sel, { size, speed }, profs.find(p => p.id === cur));
-    if (e.target.closest('.lab-back')) { const an = lab.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: 'forwards' }); an.onfinish = () => lab.remove(); }
+    if (e.target.closest('.lab-back')) { clearTimeout(st); save(); io?.disconnect(); document.body.classList.remove('lab-open'); const an = lab.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: 'forwards' }); an.onfinish = () => lab.remove(); }
   });
   lab.addEventListener('input', e => {
     if (e.target.id !== 'lab-size' && e.target.id !== 'lab-speed') return;
     size = +lab.querySelector('#lab-size').value; speed = +lab.querySelector('#lab-speed').value;
     lab.querySelector('#lab-size-v').textContent = size; lab.querySelector('#lab-speed-v').textContent = String(speed).replace('.', ',') + '×';
-    save(); applyLdLook(lab, { size, speed });
+    if (!sq) sq = requestAnimationFrame(() => { sq = 0; applyLdLook(lab, { size, speed }); });     // no máximo uma vez por imagem
+    clearTimeout(st); st = setTimeout(save, 200);                      // e grava quando pára (não a cada pixel)
   });
   return lab;
 }
@@ -3526,22 +3536,29 @@ function applySpeed() {                                           // chamado qua
   });
 }
 // Cursores "Velocidade" e "Quantidade de efeitos" da janela de aparência: aplicam-se enquanto se arrasta e guardam-se ao largar.
-let fxQueued = false;
+let fxQueued = false; const fxKeys = new Set();
 document.addEventListener('input', e => {
   const r = e.target.closest?.('[data-fx]'); if (!r) return;
   const p = current(); if (!p) return;
   const key = r.dataset.fx, v = +r.value;
-  p.theme = { ...themeOf(p), [key]: v };
+  p.theme = { ...themeOf(p), [key]: v }; fxKeys.add(key);
   const lab = r.parentElement.querySelector('.fx-val'); if (lab) lab.textContent = key === 'speed' ? fxSpeedLabel(v) : FX_AMOUNT[v - 1];
   if (fxQueued) return; fxQueued = true;
   requestAnimationFrame(() => {
     fxQueued = false;
-    const th = themeOf(current());
-    applyTheme(th); applySpeed();
-    refreshPreviews(th);                                         // as miniaturas também mostram a quantidade escolhida
+    const th = themeOf(current()), onlySpeed = fxKeys.size === 1 && fxKeys.has('speed'); fxKeys.clear();
+    if (onlySpeed) { appliedTheme = { ...appliedTheme, speed: th.speed }; applySpeed(); }      // a velocidade só muda o ritmo: não refaz o tema todo a cada fotograma
+    else { applyTheme(th); applySpeed(); }
   });
 });
-document.addEventListener('change', e => { if (e.target.closest?.('[data-fx]')) saveDB(); });
+document.addEventListener('change', e => {
+  if (!e.target.closest?.('[data-fx]')) return;
+  const th = themeOf(current()); applyTheme(th); applySpeed(); refreshPreviews(th); saveDB();      // ao largar: aplica a sério, atualiza as miniaturas e guarda
+});
+/* Enquanto se desliza ou faz scroll na janela, a página por baixo pára de animar (menos trabalho = mais fluido); volta logo a seguir. */
+let pauseT = 0;
+function pauseFx(ms = 220) { document.body.classList.add('pausing'); clearTimeout(pauseT); pauseT = setTimeout(() => document.body.classList.remove('pausing'), ms); }
+document.addEventListener('scroll', e => { if (e.target.closest?.('.sheet')) pauseFx(); }, { capture: true, passive: true });
 /* Cursores (velocidade e quantidade): só se mexem se agarrares no botão redondo e arrastares para os lados. Tocar na barra, ou arrastar para cima e para baixo
    (para fazer scroll), já não muda nada. Por isso o <input> não recebe toques (pointer-events: none) e este código trata do gesto. */
 let fxDrag = null;
@@ -3593,10 +3610,16 @@ document.addEventListener('pointerup', endFxDrag); document.addEventListener('po
   document.addEventListener('pointerup', end, { passive: true }); document.addEventListener('pointercancel', end, { passive: true });
 })();
 const WATCH = '.seg, .nav, .big-total, .cover';
+let visIO = null;
+function watchVisible() {                                              // capas e cartões que saíram do ecrã deixam de animar (não custam nada ao deslizar)
+  if (!('IntersectionObserver' in window)) return;
+  visIO ||= new IntersectionObserver(es => es.forEach(en => en.target.classList.toggle('offscr', !en.isIntersecting)), { rootMargin: '60px 0px' });
+  document.querySelectorAll('.big-total, .cover').forEach(el => { if (!el.__vis) { el.__vis = 1; visIO.observe(el); } });
+}
 let segQueued = false;
 const queueSync = () => {
   if (segQueued) return; segQueued = true;
-  requestAnimationFrame(() => { segQueued = false; syncSegs(); syncNav(); syncAnims(); });
+  requestAnimationFrame(() => { segQueued = false; syncSegs(); syncNav(); syncAnims(); watchVisible(); });
 };
 new MutationObserver(muts => {
   for (const m of muts) {
